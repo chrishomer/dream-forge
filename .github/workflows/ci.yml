@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Sync deps
+        run: uv sync
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run mypy services modules tools
+      - name: Tests
+        run: uv run pytest -q
+      - name: Export OpenAPI
+        run: PYTHONPATH=. uv run python scripts/export_openapi.py --out docs/openapi/openapi.v1.json
+      - name: Check OpenAPI is committed
+        run: |
+          git diff --exit-code -- docs/openapi/openapi.v1.json || (echo 'OpenAPI spec changed. Run `make openapi` and commit.' && exit 1)
+
