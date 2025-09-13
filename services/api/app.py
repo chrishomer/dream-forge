@@ -10,6 +10,7 @@ from fastapi import FastAPI, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Gauge, generate_latest
 
 from .config import get_settings
+from .routes import router as v1_router
 
 
 _REGISTRY = CollectorRegistry()
@@ -75,6 +76,9 @@ def create_app() -> FastAPI:
     def metrics() -> Response:
         output = generate_latest(_REGISTRY)
         return Response(output, media_type=CONTENT_TYPE_LATEST)
+
+    # Mount placeholder /v1 router so OpenAPI contains a versioned root
+    app.include_router(v1_router)
 
     return app
 
