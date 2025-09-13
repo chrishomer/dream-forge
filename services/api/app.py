@@ -6,6 +6,7 @@ from typing import Any
 
 import boto3
 import psycopg
+from sqlalchemy.engine import make_url
 from fastapi import FastAPI, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Gauge, generate_latest
 
@@ -18,7 +19,19 @@ _HEALTH_HITS = Counter("df_api_healthz_hits", "Health endpoint hits", registry=_
 _READY_GAUGE = Gauge("df_api_ready", "Readiness status (1=ready, 0=not)", registry=_REGISTRY)
 
 
-def _check_db(url: str, timeout_s: float = 1.0) -> None:
+def _normalize_conninfo(url: str) -> str:
+    # Support SQLAlchemy-style URLs (e.g., postgresql+psycopg://) by normalizing to psycopg form.
+    try:
+        if "+" in url.split("://", 1)[0]:
+            sa_url = make_url(url).set(drivername="postgresql")
+            url = sa_url.render_as_string(hide_password=False)
+    except Exception:
+        pass
+    return url
+
+
+def _check_db(url: str, timeout_s: int = 1) -> None:
+    url = _normalize_conninfo(url)
     with psycopg.connect(url, connect_timeout=timeout_s) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1")

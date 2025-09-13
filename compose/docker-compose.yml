@@ -1,4 +1,4 @@
-version: "3.9"
+name: dream-forge
 
 services:
   postgres:
@@ -49,7 +49,7 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     entrypoint: ["/bin/sh", "-c"]
     command: >-
-      "mc alias set local http://minio:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD && \
+      "mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD && \
        mc mb --ignore-existing local/dreamforge && \
        mc anonymous set none local/dreamforge || true"
 
@@ -94,6 +94,16 @@ services:
       DF_MINIO_SECRET_KEY: minioadmin
       DF_MINIO_BUCKET: dreamforge
       DF_WORKER_METRICS_PORT: 9009
+      DF_WORKER_CONCURRENCY: 2
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9009/metrics"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     depends_on:
       postgres:
         condition: service_healthy

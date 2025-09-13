@@ -11,6 +11,9 @@ This guide gets you from clone to a healthy local run using `uv` and Docker Comp
 - Sync deps: `make uv-sync`
 - Lint/type/tests: `make lint type test`
 - Export OpenAPI: `make openapi`
+ - Bring up stack: `make up`
+ - Verify readiness: `curl http://127.0.0.1:8001/readyz` should return `{ "status": "ready" }`
+ - Quick health snapshot: `make status`
 
 ## Run (Compose)
 - Start stack: `make up`
@@ -33,4 +36,3 @@ Notes:
 - See `CONTRIBUTING.md` and the PR template.
 - Keep the OpenAPI spec in sync: run `make openapi` and commit changes.
 - If you introduce a new service, external dependency, public endpoint, or schema change, write an ADR under `docs/adrs/`.
-

@@ -17,6 +17,8 @@ def _new_app() -> Celery:
         task_acks_late=True,
         worker_prefetch_multiplier=1,
         task_always_eager=os.getenv("DF_CELERY_EAGER", "false").lower() in {"1", "true", "yes"},
+        worker_concurrency=int(os.getenv("DF_WORKER_CONCURRENCY", "2")),
+        broker_connection_retry_on_startup=True,
     )
 
     return app
@@ -46,4 +48,3 @@ def _start_metrics_server() -> None:
 
 
 _start_metrics_server()
-

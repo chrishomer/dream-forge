@@ -20,5 +20,4 @@ COPY modules ./modules
 
 EXPOSE 9009
 
-CMD ["uv", "run", "celery", "-A", "services.worker.celery_app.app", "worker", "-Q", "gpu.default", "-l", "info"]
-
+CMD ["uv", "run", "--no-dev", "celery", "-A", "services.worker.celery_app.app", "worker", "-Q", "gpu.default", "-l", "info"]

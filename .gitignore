@@ -1,0 +1,46 @@
+# OS/Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python build & bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Virtual envs
+.venv/
+venv/
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Local runtime data
+db/
+logs/
+indexes/
+objects/
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
+
+# Docker/compose local overrides
+docker-compose.override.yml
+
+# Examples (ignored per repo policy)
+example/
+

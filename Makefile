@@ -1,4 +1,4 @@
-.PHONY: uv-sync lint fmt type test openapi up down logs migrate-head migrate-rev run-api run-worker
+.PHONY: uv-sync lint fmt type test openapi up down logs migrate-head migrate-rev run-api run-worker status
 
 uv-sync:
 	uv sync
@@ -39,3 +39,5 @@ run-api:
 run-worker:
 	uv run celery -A services.worker.celery_app.app worker -Q gpu.default -l info
 
+status:
+	bash scripts/status.sh
