@@ -48,3 +48,9 @@ def _start_metrics_server() -> None:
 
 
 _start_metrics_server()
+
+# Ensure task modules are imported so Celery registers them
+try:  # pragma: no cover
+    import services.worker.tasks.generate  # noqa: F401
+except Exception:
+    pass

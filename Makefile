@@ -1,4 +1,4 @@
-.PHONY: uv-sync lint fmt type test openapi up down logs migrate-head migrate-rev run-api run-worker status
+.PHONY: uv-sync lint fmt type test openapi up down logs migrate-head migrate-rev run-api run-worker status inspect-env gpu-cdi-generate gpu-cdi-list
 
 uv-sync:
 	uv sync
@@ -41,3 +41,12 @@ run-worker:
 
 status:
 	bash scripts/status.sh
+
+inspect-env:
+	bash scripts/inspect_env.sh
+
+gpu-cdi-generate:
+	bash scripts/gpu_cdi_generate.sh
+
+gpu-cdi-list:
+	command -v nvidia-ctk >/dev/null 2>&1 && nvidia-ctk cdi list || echo "nvidia-ctk not found"

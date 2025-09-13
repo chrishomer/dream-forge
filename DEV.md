@@ -28,6 +28,13 @@ Notes:
 - MinIO console is at `http://127.0.0.1:9001` with `minioadmin:minioadmin` (dev only).
 - The default bucket `dreamforge` is auto-created at startup.
 
+## Container GPU via CDI (M1)
+- Ensure NVIDIA drivers and Container Toolkit are installed (`nvidia-smi`, `nvidia-ctk --version`).
+- Generate CDI spec if missing: `make gpu-cdi-generate` (writes `/etc/cdi/nvidia.yaml`).
+- Inspect environment: `make inspect-env` to print Docker, runtimes, CDI devices, and groups.
+- The `worker` service in Compose requests GPUs via CDI devices (`driver: cdi`, `device_ids: ["nvidia.com/gpu=all"]`).
+- Verify inside the container: `cd compose && docker compose exec worker nvidia-smi`.
+
 ## Migrations
 - Upgrade to head: `make migrate-head`
 - Create a new revision: `make migrate-rev m="add table foo"`
