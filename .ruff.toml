@@ -1,0 +1,10 @@
+line-length = 100
+target-version = "py312"
+extend-exclude = ["example", "docs", "db", "alembic/versions", "indexes", "logs", "objects"]
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[lint.isort]
+known-first-party = ["services", "modules", "tools"]
