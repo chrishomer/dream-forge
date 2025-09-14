@@ -43,3 +43,10 @@ Notes:
 - See `CONTRIBUTING.md` and the PR template.
 - Keep the OpenAPI spec in sync: run `make openapi` and commit changes.
 - If you introduce a new service, external dependency, public endpoint, or schema change, write an ADR under `docs/adrs/`.
+
+## M2 (Artifacts/Logs/Progress) Env Knobs
+- `DF_PRESIGN_EXPIRES_S` — presigned URL expiry seconds (min 300, max 86400; default 3600)
+- `DF_LOGS_TAIL_DEFAULT` — default NDJSON tail lines (default 500)
+- `DF_LOGS_TAIL_MAX` — maximum allowed `tail` (default 2000)
+- `DF_SSE_POLL_MS` — DB poll interval for SSE in milliseconds (default 500)
+- `DF_SSE_HEARTBEAT_S` — SSE heartbeat seconds (default 15)
