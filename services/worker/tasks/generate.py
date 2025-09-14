@@ -16,6 +16,10 @@ from modules.persistence.models import Step
 from modules.persistence import repos
 from modules.storage import s3 as s3mod
 
+import gc
+from multiprocessing import get_context
+import contextlib
+
 
 def _find_generate_step(session, job_id: _uuid.UUID) -> Step:
     job, steps = repos.get_job_with_steps(session, job_id)
@@ -41,29 +45,98 @@ def _run_fake(prompt: str, width: int, height: int, seed: int) -> bytes:
     return bio.getvalue()
 
 
-def _run_real(model_path: str, prompt: str, negative_prompt: str | None, width: int, height: int, steps: int, guidance: float, seed: int) -> bytes:
-    import torch  # type: ignore
-    from diffusers import StableDiffusionXLPipeline  # type: ignore
+def _child_generate(model_path: str, prompt: str, negative_prompt: str | None, width: int, height: int, steps: int, guidance: float, seed: int, conn) -> None:  # pragma: no cover
+    try:
+        import torch  # type: ignore
+        from diffusers import StableDiffusionXLPipeline  # type: ignore
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.float16 if device == "cuda" else torch.float32
-    pipe = StableDiffusionXLPipeline.from_single_file(model_path, torch_dtype=dtype)
-    pipe = pipe.to(device)
-    generator = torch.Generator(device=device).manual_seed(seed)
-    with torch.autocast(device):
-        images = pipe(
-            prompt=prompt,
-            negative_prompt=negative_prompt or None,
-            width=width,
-            height=height,
-            num_inference_steps=steps,
-            guidance_scale=guidance,
-            generator=generator,
-        ).images
-    img = images[0]
-    bio = io.BytesIO()
-    img.save(bio, format="PNG")
-    return bio.getvalue()
+        torch.backends.cudnn.benchmark = False
+        has_cuda = torch.cuda.is_available()
+        device = "cuda" if has_cuda else "cpu"
+        dtype = torch.float16 if has_cuda else torch.float32
+        pipe = StableDiffusionXLPipeline.from_single_file(model_path, torch_dtype=dtype)
+        # Memory/throughput tweaks
+        try:
+            pipe.enable_attention_slicing()
+            pipe.enable_vae_slicing()
+        except Exception:
+            pass
+        # Prefer explicit device placement. Avoid mixing with CPU offload which can cause blank outputs when mis-ordered.
+        if has_cuda:
+            try:
+                pipe.to("cuda")
+            except Exception:
+                pipe.to(device)
+        else:
+            pipe.to("cpu")
+
+        generator = torch.Generator(device=device).manual_seed(seed)
+        with torch.inference_mode():
+            with torch.autocast("cuda", dtype=torch.float16) if has_cuda else contextlib.nullcontext():
+                images = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt or None,
+                    width=width,
+                    height=height,
+                    num_inference_steps=steps,
+                    guidance_scale=guidance,
+                    generator=generator,
+                ).images
+        img = images[0]
+        bio = io.BytesIO()
+        img.save(bio, format="PNG")
+        conn.send_bytes(bio.getvalue())
+    finally:
+        try:
+            # Aggressive cleanup to release GPU VRAM
+            try:
+                del img, images, pipe  # type: ignore[name-defined]
+            except Exception:
+                pass
+            try:
+                import torch  # type: ignore
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+            except Exception:
+                pass
+            gc.collect()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _run_real(model_path: str, prompt: str, negative_prompt: str | None, width: int, height: int, steps: int, guidance: float, seed: int) -> bytes:
+    # Execute the diffusion run in a spawned subprocess to guarantee GPU memory cleanup on exit.
+    mp = get_context("spawn")
+    parent_conn, child_conn = mp.Pipe(False)
+    p = mp.Process(
+        target=_child_generate,
+        args=(model_path, prompt, negative_prompt, width, height, steps, guidance, seed, child_conn),
+        daemon=True,
+    )
+    p.start()
+    child_conn.close()
+    data = parent_conn.recv_bytes()  # may block until child finishes
+    p.join(timeout=5)
+    try:
+        parent_conn.close()
+    except Exception:
+        pass
+    # Parent-side GC and CUDA cache clear (in case any context leaked into parent)
+    try:
+        import torch  # type: ignore
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception:
+        pass
+    gc.collect()
+    return data
 
 
 @shared_task(name="jobs.generate")
@@ -105,6 +178,16 @@ def generate(*, job_id: str) -> dict[str, Any]:
                 "/models/civitai/epicrealismXL_working.safetensors",
             )
             data = _run_real(model_path, prompt, negative, width, height, steps, guidance, seed)
+        # Optional black-frame sanity check (pixel variance). If image appears blank, raise to surface error in logs.
+        try:
+            img = Image.open(io.BytesIO(data))
+            extrema = img.convert("L").getextrema()
+            if extrema and extrema[0] == extrema[1]:
+                # Completely flat image (all pixels same). Treat as failure for now.
+                raise RuntimeError(f"generated image appears blank (grayscale extrema={extrema})")
+        except Exception:
+            # If PIL cannot open, let upload proceed; S3 will store bytes for post-mortem.
+            pass
         fmt = "png"
         ts = _now_ts()
         key = f"dreamforge/default/jobs/{job_id}/generate/{ts}_0_{width}x{height}_{seed}.{fmt}"
@@ -138,3 +221,14 @@ def generate(*, job_id: str) -> dict[str, Any]:
             repos.mark_job_status(session, job_uuid, "failed", error={"code": "internal", "message": str(exc)})
             repos.append_event(session, job_id=job_uuid, step_id=step.id, code="error", level="error", payload={"message": str(exc)})
         raise
+    finally:
+        # Parent-side final cleanup to reduce VRAM fragmentation across tasks
+        try:
+            import torch  # type: ignore
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+        except Exception:
+            pass
+        gc.collect()

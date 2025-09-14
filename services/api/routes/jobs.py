@@ -85,4 +85,6 @@ def get_job(job_id: str) -> JobStatusResponse:
             updated_at=job.updated_at.isoformat(),
             steps=[StepSummary(name=s.name, status=s.status) for s in steps],
             summary={"count": 1, "completed": 1 if job.status == "succeeded" else 0},
+            error_code=job.error_code,
+            error_message=job.error_message,
         )

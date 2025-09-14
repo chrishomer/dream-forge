@@ -53,11 +53,24 @@ services:
        mc mb --ignore-existing local/dreamforge && \
        mc anonymous set none local/dreamforge || true"
 
+  migrate-db:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    environment:
+      DF_DB_URL: postgresql+psycopg://dfs:dfs@postgres:5432/dreamforge
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["uv", "run", "alembic", "upgrade", "head"]
+    restart: "no"
+
   api:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
     environment:
+      PYTHONPATH: /app
       DF_DB_URL: postgresql+psycopg://dfs:dfs@postgres:5432/dreamforge
       DF_REDIS_URL: redis://redis:6379/0
       DF_MINIO_ENDPOINT: http://minio:9000
@@ -65,6 +78,7 @@ services:
       DF_MINIO_SECRET_KEY: minioadmin
       DF_MINIO_BUCKET: dreamforge
       DF_READY_CHECKS: db,s3
+      DF_MODELS_ROOT: /models
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +87,8 @@ services:
       minio:
         condition: service_healthy
       minio-create-bucket:
+        condition: service_completed_successfully
+      migrate-db:
         condition: service_completed_successfully
     ports:
       - "8001:8001"
@@ -83,14 +99,15 @@ services:
       retries: 10
     volumes:
       - ${HOME}/.cache/dream-forge:/models:ro
-    environment:
-      DF_MODELS_ROOT: /models
+    
 
   worker:
     build:
       context: ..
       dockerfile: docker/Dockerfile.worker
+    command: ["celery", "-A", "services.worker.celery_app.app", "worker", "-l", "info", "-P", "solo", "-c", "1"]
     environment:
+      PYTHONPATH: /app
       DF_DB_URL: postgresql+psycopg://dfs:dfs@postgres:5432/dreamforge
       DF_REDIS_URL: redis://redis:6379/0
       DF_MINIO_ENDPOINT: http://minio:9000
@@ -98,20 +115,16 @@ services:
       DF_MINIO_SECRET_KEY: minioadmin
       DF_MINIO_BUCKET: dreamforge
       DF_WORKER_METRICS_PORT: 9009
-      DF_WORKER_CONCURRENCY: 2
-    devices:
-      - driver: cdi
-        device_ids: ["nvidia.com/gpu=all"]
-    environment:
-      DF_DB_URL: postgresql+psycopg://dfs:dfs@postgres:5432/dreamforge
-      DF_REDIS_URL: redis://redis:6379/0
-      DF_MINIO_ENDPOINT: http://minio:9000
-      DF_MINIO_ACCESS_KEY: minioadmin
-      DF_MINIO_SECRET_KEY: minioadmin
-      DF_MINIO_BUCKET: dreamforge
-      DF_WORKER_METRICS_PORT: 9009
-      DF_WORKER_CONCURRENCY: 2
+      DF_WORKER_CONCURRENCY: 1
       DF_MODELS_ROOT: /models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids: ["nvidia.com/gpu=all"]
+              capabilities: ["gpu"]
+    
     ulimits:
       nofile:
         soft: 65536
@@ -126,6 +139,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate-db:
+        condition: service_completed_successfully
     ports:
       - "9010:9009"
     volumes:

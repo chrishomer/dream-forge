@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS base
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -8,9 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 
 RUN pip install --no-cache-dir uv
 
-# Preinstall CUDA-enabled PyTorch runtime compatible with host drivers (CUDA 12.1)
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu121 \
-    torch==2.3.1+cu121 torchvision==0.18.1+cu121
+# Preinstall CUDA-enabled PyTorch runtime into the project venv (CUDA 12.1)
 
 WORKDIR /app
 
@@ -20,12 +18,15 @@ COPY uv.lock ./
 # Install project base deps (celery, psycopg, boto3, etc.)
 RUN uv sync --frozen --no-dev
 
-# Install runner libs on top of torch
-RUN pip install --no-cache-dir diffusers==0.29.2 accelerate==0.31.0 transformers==4.41.2 safetensors==0.4.5 pillow==10.4.0
+# Also install runtime deps into system site-packages for non-uv execution
+RUN pip install --no-cache-dir \
+    celery==5.5.3 redis==5.0.8 psycopg[binary]==3.2.10 boto3==1.40.30 SQLAlchemy==2.0.43 alembic==1.16.5 prometheus-client==0.22.1 pydantic==2.11.9 \
+    diffusers==0.29.2 accelerate==0.31.0 transformers==4.41.2 safetensors==0.4.5 pillow==10.4.0
 
 COPY services ./services
 COPY modules ./modules
+COPY scripts ./scripts
 
 EXPOSE 9009
 
-CMD ["uv", "run", "--no-dev", "celery", "-A", "services.worker.celery_app.app", "worker", "-Q", "gpu.default", "-l", "info"]
+CMD ["celery", "-A", "services.worker.celery_app.app", "worker", "-l", "info"]

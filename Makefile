@@ -1,4 +1,7 @@
-.PHONY: uv-sync lint fmt type test openapi up down logs migrate-head migrate-rev run-api run-worker status inspect-env gpu-cdi-generate gpu-cdi-list
+.PHONY: uv-sync lint fmt type test openapi up up-fake down logs migrate-head migrate-rev run-api run-worker status inspect-env gpu-cdi-generate gpu-cdi-list e2e-m1 bucket bucket-ls
+
+API_BASE?=http://localhost:8001/v1
+E2E_TIMEOUT_S?=480
 
 uv-sync:
 	uv sync
@@ -19,7 +22,10 @@ openapi:
 	PYTHONPATH=. uv run python scripts/export_openapi.py --out docs/openapi/openapi.v1.json
 
 up:
-	cd compose && docker compose up -d
+	cd compose && docker compose up -d --build
+
+up-fake:
+	cd compose && docker compose -f docker-compose.yml -f docker-compose.fake.yml up -d --build
 
 down:
 	cd compose && docker compose down -v
@@ -50,3 +56,15 @@ gpu-cdi-generate:
 
 gpu-cdi-list:
 	command -v nvidia-ctk >/dev/null 2>&1 && nvidia-ctk cdi list || echo "nvidia-ctk not found"
+
+gpu-free:
+	cd compose && docker compose exec -T worker python scripts/gpu_cleanup.py || true
+
+e2e-m1:
+	API_BASE=$(API_BASE) E2E_TIMEOUT_S=$(E2E_TIMEOUT_S) uv run python scripts/e2e_m1.py
+
+bucket:
+	cd compose && docker compose run --rm minio-create-bucket
+
+bucket-ls:
+	cd compose && docker compose run --rm minio-create-bucket sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc ls -r local/dreamforge || true'

@@ -1,0 +1,6 @@
+services:
+  worker:
+    environment:
+      DF_FAKE_RUNNER: "1"
+      DF_SMOKE: "1"
+      DF_WORKER_CONCURRENCY: 1

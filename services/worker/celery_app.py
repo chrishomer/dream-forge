@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from celery import Celery
+from kombu import Exchange, Queue
 from prometheus_client import Counter, Gauge, start_http_server
 
 
@@ -19,8 +20,23 @@ def _new_app() -> Celery:
         task_always_eager=os.getenv("DF_CELERY_EAGER", "false").lower() in {"1", "true", "yes"},
         worker_concurrency=int(os.getenv("DF_WORKER_CONCURRENCY", "2")),
         broker_connection_retry_on_startup=True,
+        imports=("services.worker.tasks.generate",),
     )
 
+    # Declare GPU queue with direct exchange and matching routing key
+    gpu_exchange = Exchange("gpu.default", type="direct")
+    app.conf.task_queues = (
+        Queue("gpu.default", exchange=gpu_exchange, routing_key="gpu.default"),
+    )
+    app.conf.task_default_queue = "gpu.default"
+    app.conf.task_default_exchange = "gpu.default"
+    app.conf.task_default_exchange_type = "direct"
+    app.conf.task_default_routing_key = "gpu.default"
+
+    # Make this the default app so @shared_task binds here
+    app.set_default()  # pragma: no cover
+    # Discover tasks packages explicitly
+    app.autodiscover_tasks(["services.worker.tasks"])  # pragma: no cover
     return app
 
 

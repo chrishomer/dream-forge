@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql as pg
 
 
 # revision identifiers, used by Alembic.
@@ -20,7 +21,7 @@ depends_on: str | None = None
 def upgrade() -> None:
     op.create_table(
         "jobs",
-        sa.Column("id", sa.String(length=36), primary_key=True),
+        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
         sa.Column("type", sa.String(), nullable=False),
         sa.Column("status", sa.String(), nullable=False),
         sa.Column("params_json", sa.JSON(), nullable=False),
@@ -39,8 +40,8 @@ def upgrade() -> None:
 
     op.create_table(
         "steps",
-        sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column("job_id", sa.String(length=36), sa.ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
+        sa.Column("job_id", pg.UUID(as_uuid=True), sa.ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("status", sa.String(), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
@@ -55,9 +56,9 @@ def upgrade() -> None:
 
     op.create_table(
         "events",
-        sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column("job_id", sa.String(length=36), sa.ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("step_id", sa.String(length=36), sa.ForeignKey("steps.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
+        sa.Column("job_id", pg.UUID(as_uuid=True), sa.ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("step_id", pg.UUID(as_uuid=True), sa.ForeignKey("steps.id", ondelete="CASCADE"), nullable=True),
         sa.Column("ts", sa.DateTime(timezone=True), nullable=False),
         sa.Column("code", sa.String(), nullable=False),
         sa.Column("level", sa.String(), nullable=False, server_default="info"),
@@ -68,9 +69,9 @@ def upgrade() -> None:
 
     op.create_table(
         "artifacts",
-        sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column("job_id", sa.String(length=36), sa.ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("step_id", sa.String(length=36), sa.ForeignKey("steps.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
+        sa.Column("job_id", pg.UUID(as_uuid=True), sa.ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("step_id", pg.UUID(as_uuid=True), sa.ForeignKey("steps.id", ondelete="CASCADE"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("format", sa.String(), nullable=False),
         sa.Column("width", sa.Integer(), nullable=False),
@@ -89,7 +90,7 @@ def upgrade() -> None:
 
     op.create_table(
         "models",
-        sa.Column("id", sa.String(length=36), primary_key=True),
+        sa.Column("id", pg.UUID(as_uuid=True), primary_key=True),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("kind", sa.String(), nullable=False),
         sa.Column("version", sa.String(), nullable=True),
@@ -128,4 +129,3 @@ def downgrade() -> None:
     op.drop_index("jobs_status_idx", table_name="jobs")
     op.drop_index("jobs_updated_idx", table_name="jobs")
     op.drop_table("jobs")
-

@@ -42,6 +42,8 @@ class JobStatusResponse(BaseModel):
     updated_at: str
     steps: list[StepSummary] = []
     summary: dict = {}
+    error_code: str | None = None
+    error_message: str | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -49,4 +51,3 @@ class ErrorResponse(BaseModel):
     message: str
     details: dict | None = None
     correlation_id: str | None = None
-
