@@ -60,6 +60,58 @@ def get_job_with_steps(session: Session, job_id: str | _uuid.UUID) -> tuple[Job 
     return job, list(steps)
 
 
+def list_artifacts_by_job(session: Session, job_id: str | _uuid.UUID) -> list[Artifact]:
+    jid = str(job_id)
+    rows = session.scalars(
+        select(Artifact)
+        .where(cast(Artifact.job_id, String) == jid)
+        .order_by(Artifact.item_index.asc(), Artifact.created_at.asc())
+    ).all()
+    return list(rows)
+
+
+def iter_events(
+    session: Session,
+    job_id: str | _uuid.UUID,
+    *,
+    since_ts: datetime | None = None,
+    tail: int | None = None,
+) -> list[Event]:
+    jid = str(job_id)
+    stmt = select(Event).where(cast(Event.job_id, String) == jid)
+    if since_ts is not None:
+        stmt = stmt.where(Event.ts >= since_ts)
+        stmt = stmt.order_by(Event.ts.asc())
+        return list(session.scalars(stmt).all())
+
+    # Tail without since: fetch last N by ts desc, then reverse in memory
+    stmt = stmt.order_by(Event.ts.desc())
+    if tail is not None and tail > 0:
+        stmt = stmt.limit(int(tail))
+    out = list(session.scalars(stmt).all())
+    out.reverse()
+    return out
+
+
+def progress_for_job(session: Session, job_id: str | _uuid.UUID) -> float:
+    job = get_job(session, job_id)
+    if not job:
+        return 0.0
+    # Minimal aggregation per M2 plan
+    if job.status == "succeeded":
+        return 1.0
+    if job.status == "failed":
+        # Leave last known progress (approximate via events presence)
+        evts = iter_events(session, job_id, since_ts=None, tail=None)
+        has_artifact = any(e.code == "artifact.written" for e in evts)
+        return 0.9 if has_artifact else 0.5 if any(e.code == "step.start" for e in evts) else 0.0
+    if job.status == "running":
+        evts = iter_events(session, job_id, since_ts=None, tail=None)
+        return 0.9 if any(e.code == "artifact.written" for e in evts) else 0.5
+    # queued
+    return 0.0
+
+
 def mark_step_running(session: Session, step_id: _uuid.UUID) -> None:
     session.execute(
         update(Step)
