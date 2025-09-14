@@ -117,6 +117,17 @@ services:
       DF_WORKER_METRICS_PORT: 9009
       DF_WORKER_CONCURRENCY: 1
       DF_MODELS_ROOT: /models
+      # Generation tuning defaults (safe for 1024x1024 on 12GB GPUs)
+      DF_ENABLE_XFORMERS: "0"
+      DF_ATTENTION_SLICING: "0"
+      DF_VAE_SLICING: "1"
+      DF_VAE_TILING: "1"
+      DF_SDP_BACKEND: "auto"
+      DF_CUDA_MEM_FRAC: "0.95"
+      DF_MODEL_CPU_OFFLOAD: "1"
+      DF_SEQUENTIAL_CPU_OFFLOAD: "0"
+      DF_USE_SDXL_VAE_FP16_FIX: "1"
+      DF_VAE_PRECISION: "fp16"
     deploy:
       resources:
         reservations:

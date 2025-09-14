@@ -19,6 +19,11 @@ from modules.storage import s3 as s3mod
 import gc
 from multiprocessing import get_context
 import contextlib
+from diffusers import AutoencoderKL  # type: ignore
+
+
+def _env_truthy(name: str, default: str = "0") -> bool:
+    return (os.getenv(name, default) or "").lower() in {"1", "true", "yes", "on"}
 
 
 def _find_generate_step(session, job_id: _uuid.UUID) -> Step:
@@ -52,36 +57,114 @@ def _child_generate(model_path: str, prompt: str, negative_prompt: str | None, w
 
         torch.backends.cudnn.benchmark = False
         has_cuda = torch.cuda.is_available()
-        device = "cuda" if has_cuda else "cpu"
+        device = torch.device("cuda") if has_cuda else torch.device("cpu")
         dtype = torch.float16 if has_cuda else torch.float32
-        pipe = StableDiffusionXLPipeline.from_single_file(model_path, torch_dtype=dtype)
-        # Memory/throughput tweaks
+
+        # Optional CUDA mem fraction cap
+        mem_frac_env = os.getenv("DF_CUDA_MEM_FRAC", "0.95")
         try:
-            pipe.enable_attention_slicing()
-            pipe.enable_vae_slicing()
+            if has_cuda and mem_frac_env:
+                torch.cuda.set_per_process_memory_fraction(float(mem_frac_env), device=torch.cuda.current_device())
         except Exception:
             pass
-        # Prefer explicit device placement. Avoid mixing with CPU offload which can cause blank outputs when mis-ordered.
+
+        # Optional SDP backend selection
+        sdp = os.getenv("DF_SDP_BACKEND", "auto")
         if has_cuda:
             try:
-                pipe.to("cuda")
+                if sdp and sdp != "auto":
+                    torch.backends.cuda.sdp_kernel(
+                        enable_flash=(sdp in {"flash", "all"}),
+                        enable_mem_efficient=(sdp in {"mem", "all"}),
+                        enable_math=(sdp in {"math", "all"}),
+                        enable_cudnn=(sdp in {"cudnn", "all", "flash", "mem", "math"}),
+                    )
             except Exception:
+                pass
+
+        # Load pipeline
+        pipe = StableDiffusionXLPipeline.from_single_file(
+            model_path,
+            torch_dtype=dtype,
+            use_safetensors=True,
+        )
+
+        # Optionally replace VAE with fp16-safe SDXL VAE
+        if _env_truthy("DF_USE_SDXL_VAE_FP16_FIX", "1"):
+            try:
+                vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float16 if has_cuda else torch.float32)
+                pipe.vae = vae
+            except Exception:
+                pass
+
+        # VAE precision override
+        vae_prec = os.getenv("DF_VAE_PRECISION", "fp16").lower()
+        try:
+            if vae_prec == "fp32":
+                pipe.vae.to(dtype=torch.float32)
+        except Exception:
+            pass
+
+        # Attention/Memory toggles
+        if _env_truthy("DF_ENABLE_XFORMERS", "0"):
+            try:
+                pipe.enable_xformers_memory_efficient_attention()
+            except Exception:
+                pass
+        if _env_truthy("DF_ATTENTION_SLICING", "0"):
+            try:
+                pipe.enable_attention_slicing()
+            except Exception:
+                pass
+        if _env_truthy("DF_VAE_SLICING", "1"):
+            try:
+                pipe.enable_vae_slicing()
+            except Exception:
+                pass
+        if _env_truthy("DF_VAE_TILING", "1") and max(width, height) >= 1024:
+            try:
+                pipe.enable_vae_tiling()
+            except Exception:
+                pass
+
+        # Placement: choose exactly one path
+        if has_cuda:
+            if _env_truthy("DF_MODEL_CPU_OFFLOAD", "1"):
+                try:
+                    pipe.enable_model_cpu_offload()
+                except Exception:
+                    pipe.to(device)
+            elif _env_truthy("DF_SEQUENTIAL_CPU_OFFLOAD", "0"):
+                try:
+                    pipe.enable_sequential_cpu_offload()
+                except Exception:
+                    pipe.to(device)
+            else:
                 pipe.to(device)
         else:
-            pipe.to("cpu")
+            pipe.to(device)
 
-        generator = torch.Generator(device=device).manual_seed(seed)
+        # Informational log of chosen config
+        try:
+            print(
+                f"runner cfg: cuda={has_cuda} dtype={dtype} vae_prec={vae_prec} "
+                f"offload(model={_env_truthy('DF_MODEL_CPU_OFFLOAD','1')}, seq={_env_truthy('DF_SEQUENTIAL_CPU_OFFLOAD','0')}) "
+                f"tiling={_env_truthy('DF_VAE_TILING','1')} slicing(attn={_env_truthy('DF_ATTENTION_SLICING','0')},vae={_env_truthy('DF_VAE_SLICING','1')}) sdp={sdp}"
+            )
+        except Exception:
+            pass
+
+        generator = torch.Generator(device=str(device)).manual_seed(seed)
         with torch.inference_mode():
-            with torch.autocast("cuda", dtype=torch.float16) if has_cuda else contextlib.nullcontext():
-                images = pipe(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt or None,
-                    width=width,
-                    height=height,
-                    num_inference_steps=steps,
-                    guidance_scale=guidance,
-                    generator=generator,
-                ).images
+            images = pipe(
+                prompt=prompt,
+                negative_prompt=negative_prompt or None,
+                width=width,
+                height=height,
+                num_inference_steps=steps,
+                guidance_scale=guidance,
+                generator=generator,
+            ).images
         img = images[0]
         bio = io.BytesIO()
         img.save(bio, format="PNG")
