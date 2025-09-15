@@ -32,8 +32,16 @@ def get_progress(job_id: str) -> ProgressResponse:
         job = repos.get_job(session, job_id)
         if not job:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "job not found"})
-        value = repos.progress_for_job(session, job_id)
-    return ProgressResponse(progress=value, items=[], stages=_static_stages())
+        try:
+            count = int(job.params_json.get("count", 1)) if isinstance(job.params_json, dict) else 1
+        except Exception:
+            count = 1
+        count = max(1, min(count, 100))
+        arts = repos.list_artifacts_by_job(session, job_id)
+        completed = len(arts)
+        agg = min(1.0, max(0.0, completed / float(count)))
+        items = [{"item_index": a.item_index, "progress": 1.0} for a in arts]
+    return ProgressResponse(progress=agg, items=items, stages=_static_stages())
 
 
 @router.get(
@@ -70,7 +78,15 @@ def stream_progress(job_id: str, since_ts: str | None = None) -> StreamingRespon
             with get_session() as session:
                 status_job = repos.get_job(session, job_id)
                 events = repos.iter_events(session, job_id, since_ts=cursor, tail=None)
-                progress = repos.progress_for_job(session, job_id)
+                try:
+                    count = int(status_job.params_json.get("count", 1)) if status_job and isinstance(status_job.params_json, dict) else 1
+                except Exception:
+                    count = 1
+                count = max(1, min(count, 100))
+                arts = repos.list_artifacts_by_job(session, job_id)
+                completed = len(arts)
+                agg = min(1.0, max(0.0, completed / float(count)))
+                items = [{"item_index": a.item_index, "progress": 1.0} for a in arts]
 
             # Emit any events since cursor
             for e in events:
@@ -87,8 +103,8 @@ def stream_progress(job_id: str, since_ts: str | None = None) -> StreamingRespon
                 })
                 cursor = e.ts
 
-            # Emit progress
-            yield sse_event("progress", {"progress": progress})
+            # Emit progress (aggregate + minimal items)
+            yield sse_event("progress", {"progress": agg, "items": items, "stages": _static_stages()})
 
             # Heartbeat
             now = time.time()

@@ -242,7 +242,18 @@ def generate(*, job_id: str) -> dict[str, Any]:
     height: int = int(params.get("height", 1024))
     steps: int = int(params.get("steps", 30))
     guidance: float = float(params.get("guidance", 7.0))
-    seed: int = int(params.get("seed") or random.randint(1, 2**31 - 1))
+    # M4: batch count and per-item seeds
+    try:
+        count: int = int(params.get("count", 1))
+    except Exception:
+        count = 1
+    count = max(1, min(count, 100))
+    # Seed policy: if count>1, ignore provided seed and randomize per item.
+    base_seed = int(params.get("seed") or random.randint(1, 2**31 - 1))
+    if count > 1:
+        seeds = [random.randint(1, 2**31 - 1) for _ in range(count)]
+    else:
+        seeds = [base_seed]
 
     # For M1 smoke, allow smaller defaults via env toggles
     if os.getenv("DF_SMOKE", "0") in {"1", "true"}:
@@ -290,47 +301,57 @@ def generate(*, job_id: str) -> dict[str, Any]:
 
     fake = os.getenv("DF_FAKE_RUNNER", "0").lower() in {"1", "true"}
     try:
-        if fake:
-            data = _run_fake(prompt, width, height, seed)
-        else:
-            data = _run_real(model_path, prompt, negative, width, height, steps, guidance, seed)
-        # Optional black-frame sanity check (pixel variance). If image appears blank, raise to surface error in logs.
-        try:
-            img = Image.open(io.BytesIO(data))
-            extrema = img.convert("L").getextrema()
-            if extrema and extrema[0] == extrema[1]:
-                # Completely flat image (all pixels same). Treat as failure for now.
-                raise RuntimeError(f"generated image appears blank (grayscale extrema={extrema})")
-        except Exception:
-            # If PIL cannot open, let upload proceed; S3 will store bytes for post-mortem.
-            pass
         fmt = "png"
         ts = _now_ts()
-        key = f"dreamforge/default/jobs/{job_id}/generate/{ts}_0_{width}x{height}_{seed}.{fmt}"
-
         cfg = s3mod.from_env()
-        s3mod.upload_bytes(cfg, key, data, content_type="image/png")
 
+        for idx, seed_i in enumerate(seeds):
+            if fake:
+                data = _run_fake(prompt, width, height, seed_i)
+            else:
+                data = _run_real(model_path, prompt, negative, width, height, steps, guidance, seed_i)
+
+            # Optional black-frame sanity check per item
+            try:
+                img = Image.open(io.BytesIO(data))
+                extrema = img.convert("L").getextrema()
+                if extrema and extrema[0] == extrema[1]:
+                    raise RuntimeError(f"generated image appears blank (grayscale extrema={extrema})")
+            except Exception:
+                pass
+
+            key = f"dreamforge/default/jobs/{job_id}/generate/{ts}_{idx}_{width}x{height}_{seed_i}.{fmt}"
+            s3mod.upload_bytes(cfg, key, data, content_type="image/png")
+
+            with get_session() as session:
+                repos.insert_artifact(
+                    session,
+                    job_id=job_uuid,
+                    step_id=step.id,
+                    format=fmt,
+                    width=width,
+                    height=height,
+                    seed=seed_i,
+                    item_index=idx,
+                    s3_key=key,
+                    checksum=None,
+                    metadata_json={"prompt": prompt, "negative_prompt": negative, "seed": seed_i},
+                )
+                repos.append_event(
+                    session,
+                    job_id=job_uuid,
+                    step_id=step.id,
+                    code="artifact.written",
+                    payload={"s3_key": key, "seed": seed_i, "item_index": idx},
+                )
+
+        # Mark success only after all items complete
         with get_session() as session:
-            repos.insert_artifact(
-                session,
-                job_id=job_uuid,
-                step_id=step.id,
-                format=fmt,
-                width=width,
-                height=height,
-                seed=seed,
-                item_index=0,
-                s3_key=key,
-                checksum=None,
-                metadata_json={"prompt": prompt, "negative_prompt": negative, "seed": seed},
-            )
-            repos.append_event(session, job_id=job_uuid, step_id=step.id, code="artifact.written", payload={"s3_key": key, "seed": seed, "item_index": 0})
             repos.mark_step_finished(session, step.id, "succeeded")
             repos.mark_job_status(session, job_uuid, "succeeded")
             repos.append_event(session, job_id=job_uuid, step_id=step.id, code="step.finish")
             repos.append_event(session, job_id=job_uuid, step_id=None, code="job.finish")
-        return {"status": "ok", "artifact_key": key}
+        return {"status": "ok", "artifact_keys": count}
     except Exception as exc:  # noqa: BLE001
         with get_session() as session:
             repos.mark_step_finished(session, step.id, "failed")

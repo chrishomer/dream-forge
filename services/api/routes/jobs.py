@@ -77,6 +77,15 @@ def get_job(job_id: str) -> JobStatusResponse:
         if not job:
             raise HTTPException(status_code=404, detail={"code": "not_found", "message": "job not found"})
 
+        # Batch-aware summary
+        try:
+            count = int(job.params_json.get("count", 1)) if isinstance(job.params_json, dict) else 1
+        except Exception:
+            count = 1
+        count = max(1, min(count, 100))
+        arts = repos.list_artifacts_by_job(session, job.id)
+        completed = len(arts)
+
         return JobStatusResponse(
             id=str(job.id),
             type=job.type,
@@ -84,7 +93,7 @@ def get_job(job_id: str) -> JobStatusResponse:
             created_at=job.created_at.isoformat(),
             updated_at=job.updated_at.isoformat(),
             steps=[StepSummary(name=s.name, status=s.status) for s in steps],
-            summary={"count": 1, "completed": 1 if job.status == "succeeded" else 0},
+            summary={"count": count, "completed": completed},
             error_code=job.error_code,
             error_message=job.error_message,
         )

@@ -15,7 +15,8 @@ class JobCreateRequest(BaseModel):
     format: str = "png"  # png|jpg
     embed_metadata: bool = True
     seed: int | None = None
-    # batch 'count' arrives in M4; here we hardcode 1
+    # M4: batch count (1..100); default 1
+    count: int = Field(default=1, ge=1, le=100)
     model_id: str | None = None
 
 
