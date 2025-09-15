@@ -1,0 +1,30 @@
+[
+  {
+    "type": "registry_model",
+    "kind": "upscaler-gan",
+    "name": "realesrgan",
+    "version": "x4plus",
+    "source": {
+      "adapter": "direct",
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+      "sha256": "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1"
+    }
+  },
+  {
+    "type": "registry_model",
+    "kind": "upscaler-gan",
+    "name": "realesrgan",
+    "version": "x2plus",
+    "source": {
+      "adapter": "direct",
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth",
+      "sha256": "49fafd45f8fd7aa8d31ab2a22d14d91b536c34494a5cfe31eb5d89c2fa266abb"
+    }
+  },
+  {
+    "type": "diffusers_cache",
+    "repo": "stabilityai/stable-diffusion-x4-upscaler",
+    "revision": "main"
+  }
+]
+
