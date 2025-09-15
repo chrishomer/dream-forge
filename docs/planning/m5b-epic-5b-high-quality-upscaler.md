@@ -219,3 +219,119 @@ All knobs optional with safe defaults; absence keeps behavior compatible.
 - Stable Diffusion x4 Upscaler model card and license (Open RAIL++), training summary, and usage notes — Hugging Face `stabilityai/stable-diffusion-x4-upscaler`.
 - Diffusers StableDiffusionUpscalePipeline documentation (class, parameters, example usage).
 - Real‑ESRGAN official repository (BSD‑3‑Clause; tiling; x2/x4 models; python and NCNN inference options).
+
+---
+
+## Addendum A — Asset Storage and Prefetch Strategy (Registry + Cache)
+
+Last updated: 2025-09-15
+
+### A.1 Summary
+
+We will treat model assets via two physical storage modes while unifying them under a single logical registry and loader precedence:
+
+- Registry‑managed assets (deterministic, checksummed files under `DF_MODELS_ROOT`). Examples: SDXL checkpoints, Real‑ESRGAN x2/x4 weights, mirrored Diffusers repos.
+- Runtime‑cached assets (library‑managed caches such as `HF_HOME`). Example: SD x4 upscaler pulled by Diffusers.
+
+The registry remains the source of truth (provenance, capabilities, install status). Loaders follow a consistent precedence:
+
+1) Explicit local mirror (when configured) → 2) registry `local_path` → 3) runtime cache → 4) remote fetch (off by default in prod; allowed by CLI prefetch tools).
+
+This keeps operations simple, scales to “many models”, enables offline installs, and preserves fast library‑native experiences.
+
+### A.2 Goals and Non‑Goals
+
+Goals:
+- Support “many models” with a generic manifest‑driven prefetch tool.
+- Maintain reproducible‑enough receipts: sha256 for registry files; repo+revision for HF caches/mirrors.
+- Keep loaders simple and deterministic when mirrors exist; otherwise fall back to cache.
+
+Non‑Goals:
+- No new public API endpoints for prefetch; this is CLI/ops‑facing.
+- No DB migrations; use existing `models` table with `parameters_schema` to record `external_ref` metadata.
+
+### A.3 Data Model Mapping (No Schema Change)
+
+- Use `models.parameters_schema` to store external/cached origin for non‑registry assets:
+  - Example for SD x4: `{ "external_ref": { "hf_repo": "stabilityai/stable-diffusion-x4-upscaler", "revision": "main" }, "mirror_path": null }`
+  - Example for a mirrored repo: same `external_ref` plus a `mirror_path` pointing under `DF_MODELS_ROOT`.
+- For registry‑managed files (e.g., Real‑ESRGAN), keep the current pattern: `local_path` + `files_json` (sha256). `capabilities` includes `upscale`.
+- `installed=true` means “ready to use” regardless of mode. For cache‑only entries, `files_json` may be `[]` but `parameters_schema.external_ref` must be present.
+
+### A.4 CLI Prefetch (Design)
+
+- New module: `tools/dreamforge_cli/prefetch.py` and `assets` subcommand in the CLI.
+- Commands:
+  - `dreamforge assets prefetch --bundle upscalers [--models-root ...]` seeds SD x4 cache and Real‑ESRGAN x2/x4 weights.
+  - `dreamforge assets prefetch --manifest docs/assets/prefetch.json` supports arbitrary assets.
+  - `dreamforge assets verify --manifest ...` verifies registry items (sha256) and attempts local‑files‑only Diffusers load for mirrors/caches.
+- Manifest (JSON) entries (examples):
+  - Registry model via a direct URL with checksum:
+    `{ "type": "registry_model", "kind": "upscaler-gan", "name": "realesrgan", "version": "x4plus", "source": { "adapter": "direct", "url": "https://.../RealESRGAN_x4plus.pth", "sha256": "..." } }`
+  - Diffusers cache:
+    `{ "type": "diffusers_cache", "repo": "stabilityai/stable-diffusion-x4-upscaler", "revision": "main" }`
+  - Optional HF snapshot mirror (full repo to `DF_MODELS_ROOT`):
+    `{ "type": "registry_model", "kind": "upscaler-diffusion", "name": "sdx4", "version": "<commit>", "source": { "adapter": "hf-snapshot", "repo": "stabilityai/stable-diffusion-x4-upscaler", "revision": "<commit>" } }`
+
+Adapters:
+- Reuse existing `downloader.download()` for any `registry_model` entry; add a small `direct` adapter (URL + sha256) and a `hf-snapshot` adapter (optional, later).
+- For `diffusers_cache`, a helper imports Diffusers and runs `from_pretrained(..., local_files_only=False)` once to seed `HF_HOME` (settable to `DF_MODELS_ROOT/hf-cache`). Then upsert a registry record with `parameters_schema.external_ref` and `installed=true`.
+
+### A.5 Loader Precedence Changes
+
+- SD x4 loader (worker `sdx4.py`):
+  - If `DF_UPSCALE_SDX4_DIR` points to a valid mirror, call `from_pretrained(DF_UPSCALE_SDX4_DIR, local_files_only=True)`.
+  - Else use repo+revision (`parameters_schema.external_ref`) with `from_pretrained(model_id or repo)`, allowing cache usage.
+  - Keep memory toggles unchanged.
+- Real‑ESRGAN loader uses `local_path` only (registry‑managed weights).
+
+### A.6 Make Targets (Generic)
+
+- `assets-prefetch`:
+  - Default bundle: upscalers.
+  - Implementation: `uv run python -m tools.dreamforge_cli assets prefetch --bundle upscalers --models-root ${DF_MODELS_ROOT:-$HOME/.cache/dream-forge}`.
+  - Optional manifest: `make assets-prefetch MANIFEST=docs/assets/prefetch.json`.
+- `assets-verify`:
+  - `uv run python -m tools.dreamforge_cli assets verify --manifest ${MANIFEST}`.
+- These targets remain generic as we add models; the manifest drives scope.
+
+### A.7 Epics and Tasks
+
+E5B‑A1 — Registry Metadata & Receipts (no DB change)
+- Record `external_ref` and optional `mirror_path` under `parameters_schema` when installing cache‑based or mirrored assets.
+- AC: `GET /v1/models` returns entries with these fields in the `parameters_schema` blob when present; `installed=true` reflects ready‑to‑use state.
+
+E5B‑A2 — CLI Prefetch (assets subcommand)
+- Add `tools/dreamforge_cli/prefetch.py` with:
+  - `prefetch_manifest(path)` that iterates assets and dispatches per type.
+  - Direct adapter: verified download (URL + sha256) wiring into `downloader.download()`.
+  - Diffusers cache seeding helper; optional HF snapshot mirroring.
+- Extend `tools/dreamforge_cli/main.py` with `assets prefetch|verify` subcommands.
+- AC: `assets prefetch --bundle upscalers` succeeds on a fresh machine (with network) and prints receipts (registry ids or cache commits).
+
+E5B‑A3 — Loader Precedence & Env Knobs
+- SD x4 loader supports `DF_UPSCALE_SDX4_DIR` and uses mirror when present; otherwise uses repo/cache.
+- Prefer `HF_HOME=${DF_MODELS_ROOT}/hf-cache` to keep everything on one volume.
+- AC: With mirror set, SD x4 loads offline; with only cache, loads online once then offline; with neither, raises a clear error.
+
+E5B‑A4 — Make Targets
+- Add `assets-prefetch` and `assets-verify` targets; wire to CLI as described.
+- AC: `make assets-prefetch` seeds SD x4 cache and ESRGAN weights; `make assets-verify` reports OK.
+
+E5B‑A5 — Tests & Validation
+- Unit tests: manifest parsing, direct adapter (temp files), and registry upsert behavior.
+- Integration (no network): fake adapters that write temp files; assert downloader receipts and registry state.
+- Live (optional): run `assets prefetch` against real SD x4 + ESRGAN URLs; then run `scripts/validate_m5b_live.py`.
+- AC: CI uses fake adapters; live docs include real steps.
+
+### A.8 Risks & Mitigations
+
+- Network volatility: direct adapter verifies sha256; retries optional.
+- Cache drift: keep repo+revision in registry; encourage `HF_HOME` under `DF_MODELS_ROOT` to co‑locate caches with managed models for retention policies.
+- Storage growth: document budgets and simple pruning (`hf-cache` TTL; `assets-clean` target optional later).
+
+### A.9 Definition of Done (Addendum)
+
+- CLI `assets prefetch` and `assets verify` shipped with manifest support and upscaler bundle.
+- SD x4 loader honors `DF_UPSCALE_SDX4_DIR` for mirrors; otherwise uses repo/cache.
+- Make targets available and generic; docs updated with manifest schema and examples.
