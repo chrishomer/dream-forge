@@ -1,4 +1,4 @@
-.PHONY: uv-sync lint fmt type test openapi up up-fake down logs migrate-head migrate-rev run-api run-worker status inspect-env gpu-cdi-generate gpu-cdi-list e2e-m1 bucket bucket-ls
+.PHONY: uv-sync lint fmt type test openapi up up-fake down logs migrate-head migrate-rev run-api run-worker status inspect-env gpu-cdi-generate gpu-cdi-list e2e-m1 e2e-m4 bucket bucket-ls
 
 API_BASE?=http://localhost:8001/v1
 E2E_TIMEOUT_S?=480
@@ -75,6 +75,9 @@ gpu-free:
 
 e2e-m1:
 	API_BASE=$(API_BASE) E2E_TIMEOUT_S=$(E2E_TIMEOUT_S) uv run python scripts/e2e_m1.py
+
+e2e-m4:
+	uv run python scripts/validate_m4.py
 
 bucket:
 	cd compose && docker compose run --rm minio-create-bucket

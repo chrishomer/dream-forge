@@ -51,7 +51,8 @@ def _check_s3(endpoint: str, access_key: str, secret_key: str, bucket: str, regi
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Dream Forge API", version="0.0.0", docs_url=None, redoc_url=None)
+    # Version aligned to M4 completion
+    app = FastAPI(title="Dream Forge API", version="0.4.0-mvp", docs_url=None, redoc_url=None)
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:

@@ -47,7 +47,22 @@ def _event_to_logline(evt) -> dict[str, Any]:  # type: ignore[no-untyped-def]
 
 @router.get(
     "/jobs/{job_id}/logs",
-    responses={200: {"content": {"application/x-ndjson": {} }}, 404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    responses={
+        200: {
+            "content": {
+                "application/x-ndjson": {
+                    "examples": {
+                        "ndjson": {
+                            "summary": "Two log lines (step + artifact)",
+                            "value": "{\"ts\":\"2025-09-12T21:20:00Z\",\"level\":\"info\",\"code\":\"step.start\",\"message\":\"step.start\",\"job_id\":\"<uuid>\",\"step_id\":\"<uuid>\"}\n{\"ts\":\"2025-09-12T21:20:01Z\",\"level\":\"info\",\"code\":\"artifact.written\",\"message\":\"artifact.written\",\"job_id\":\"<uuid>\",\"step_id\":\"<uuid>\",\"item_index\":0}\n"
+                        }
+                    }
+                }
+            }
+        },
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse}
+    },
 )
 def get_logs(job_id: str, tail: int | None = None, since_ts: str | None = None) -> StreamingResponse:
     # Validate job existence

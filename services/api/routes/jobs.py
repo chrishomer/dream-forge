@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from celery import Celery
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status, Body
 
 from modules.persistence.db import get_session
 from modules.persistence import repos
@@ -32,10 +32,43 @@ def _celery() -> Celery:
     return app
 
 
-@router.post("/jobs", response_model=JobCreatedResponse, responses={
-    422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}
-})
-def create_job(req: JobCreateRequest, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")) -> JobCreatedResponse:
+@router.post(
+    "/jobs",
+    response_model=JobCreatedResponse,
+    responses={
+        422: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+)
+def create_job(
+    req: JobCreateRequest = Body(
+        examples={
+            "single": {
+                "summary": "Single image (default count=1)",
+                "value": {
+                    "type": "generate",
+                    "prompt": "a tranquil lake at sunrise",
+                    "width": 1024,
+                    "height": 1024,
+                    "steps": 30,
+                    "format": "png"
+                },
+            },
+            "batch": {
+                "summary": "Batch of 5 with per-item seeds",
+                "value": {
+                    "type": "generate",
+                    "prompt": "m4 demo",
+                    "width": 64,
+                    "height": 64,
+                    "steps": 2,
+                    "count": 5
+                },
+            },
+        }
+    ),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JobCreatedResponse:
     if req.type != "generate":
         raise HTTPException(status_code=422, detail={"code": "invalid_input", "message": "Unsupported type", "details": {"type": req.type}})
 

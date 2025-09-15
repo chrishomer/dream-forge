@@ -67,3 +67,30 @@ CLI helpers:
 Notes:
 - In M3 the Models API is read‑only and returns installed+enabled models. Mutations happen via CLI.
 - The CivitAI adapter accepts numeric version IDs in M3; richer resolution (slug/name) is planned (see `docs/future/`).
+
+## M4 (Batch + Seeds) Quickstart
+
+- Summary: Add `count` (1..100, default 1) to `POST /v1/jobs` to generate a batch in one job. Each item runs sequentially and receives its own runtime seed. Logs and artifacts include `item_index`; progress exposes aggregate and per‑item snapshots.
+
+- Smoke setup (no GPU): `make up-fake` starts the stack with `DF_FAKE_RUNNER=1` and smaller defaults.
+
+- Create a batch job (count=5):
+  - `curl -sS http://127.0.0.1:8001/v1/jobs -H 'Content-Type: application/json' -d '{"type":"generate","prompt":"m4 demo","width":64,"height":64,"steps":2,"count":5}' | jq .`
+
+- Check status summary (shows `{ count, completed }`):
+  - `curl -sS http://127.0.0.1:8001/v1/jobs/<job_id> | jq .summary`
+
+- List artifacts (note `item_index` and `seed`):
+  - `curl -sS http://127.0.0.1:8001/v1/jobs/<job_id>/artifacts | jq .`
+
+- Progress (aggregate and per‑item):
+  - `curl -sS http://127.0.0.1:8001/v1/jobs/<job_id>/progress | jq .`
+  - Stream SSE (closes when terminal): `curl -N http://127.0.0.1:8001/v1/jobs/<job_id>/progress/stream`
+
+- Logs (NDJSON with per‑item `artifact.written`):
+  - `curl -sS 'http://127.0.0.1:8001/v1/jobs/<job_id>/logs?tail=200'`
+
+Notes:
+- Seeds: When `count>1`, the worker randomizes per item even if a `seed` is provided. This keeps batches diverse; a future `seed_strategy` may make this configurable.
+- Execution model: Items run sequentially in one step to keep VRAM steady and semantics simple. Real runner may reload the pipeline per item in MVP; further optimization is planned in M5/M11.
+- Bounds: Server rejects `count<1` or `count>100` with `422 invalid_input`.

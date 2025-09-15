@@ -26,7 +26,37 @@ def _static_stages() -> list[dict[str, Any]]:
     ]
 
 
-@router.get("/jobs/{job_id}/progress", response_model=ProgressResponse, responses={404: {"model": ErrorResponse}})
+@router.get(
+    "/jobs/{job_id}/progress",
+    response_model=ProgressResponse,
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "batchProgress": {
+                            "summary": "Aggregate + per-item snapshot",
+                            "value": {
+                                "progress": 0.6,
+                                "items": [
+                                    {"item_index": 0, "progress": 1.0},
+                                    {"item_index": 1, "progress": 1.0},
+                                    {"item_index": 2, "progress": 0.0}
+                                ],
+                                "stages": [
+                                    {"name": "queued_to_start", "weight": 0.1},
+                                    {"name": "sampling", "weight": 0.8},
+                                    {"name": "finalize", "weight": 0.1}
+                                ]
+                            },
+                        }
+                    }
+                }
+            }
+        },
+        404: {"model": ErrorResponse},
+    },
+)
 def get_progress(job_id: str) -> ProgressResponse:
     with get_session() as session:
         job = repos.get_job(session, job_id)
@@ -46,7 +76,22 @@ def get_progress(job_id: str) -> ProgressResponse:
 
 @router.get(
     "/jobs/{job_id}/progress/stream",
-    responses={200: {"content": {"text/event-stream": {} }}, 404: {"model": ErrorResponse}},
+    responses={
+        200: {
+            "content": {
+                "text/event-stream": {
+                    "examples": {
+                        "sseExample": {
+                            "summary": "SSE progress and artifact events",
+                            "value": "event: progress\ndata: {\"progress\":0.4,\"items\":[{\"item_index\":0,\"progress\":1.0},{\"item_index\":1,\"progress\":0.0}]}\n\n"
+                                     "event: artifact\ndata: {\"item_index\":0,\"s3_key\":\"dreamforge/..._0_64x64_123456.png\",\"format\":\"png\",\"width\":64,\"height\":64,\"seed\":123456}\n\n"
+                        }
+                    }
+                }
+            }
+        },
+        404: {"model": ErrorResponse}
+    },
 )
 def stream_progress(job_id: str, since_ts: str | None = None) -> StreamingResponse:
     # Validate job
