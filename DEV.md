@@ -50,3 +50,20 @@ Notes:
 - `DF_LOGS_TAIL_MAX` — maximum allowed `tail` (default 2000)
 - `DF_SSE_POLL_MS` — DB poll interval for SSE in milliseconds (default 500)
 - `DF_SSE_HEARTBEAT_S` — SSE heartbeat seconds (default 15)
+
+## M3 (Models) Quickstart
+
+- Ensure `DF_MODELS_ROOT` is set (see `.env.example`). Compose mounts `${HOME}/.cache/dream-forge` to `/models` read‑only for API/Worker.
+- Download a model via CLI to the host models root:
+  - Hugging Face: `make model-download ref="hf:<repo>@<rev>#<file>"`
+  - CivitAI (version id): `make model-download ref="civitai:<version_id>"`
+  - Tokens: set `HF_TOKEN` / `CIVITAI_TOKEN` if required by the source.
+- Verify the registry via API: `curl http://127.0.0.1:8001/v1/models | jq`.
+- Create a job with a selected `model_id` (from the list). With `DF_FAKE_RUNNER=1` you can smoke‑test without a GPU.
+
+CLI helpers:
+- `make model-list`, `make model-get id=<UUID>`, `make model-verify id=<UUID>`.
+
+Notes:
+- In M3 the Models API is read‑only and returns installed+enabled models. Mutations happen via CLI.
+- The CivitAI adapter accepts numeric version IDs in M3; richer resolution (slug/name) is planned (see `docs/future/`).

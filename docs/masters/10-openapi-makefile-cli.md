@@ -440,16 +440,18 @@ Exit codes:
 
 - M1: `POST /jobs`, `GET /jobs/{id}`
 - M2: `/artifacts`, `/logs` (NDJSON), `/progress`, `/progress/stream`
-- M3: No API changes (resilience), but error responses standardized
-- M3 (renumbered in roadmap to M5): reflected in error envelope and retries semantics
-- M4: `/models`, `/models/{id}`, `model_id` in `JobCreateRequest`
-- M5: `count` in `JobCreateRequest`; `item_index` in artifacts/progress/logs documentation
+- M3: `/models`, `/models/{id}` (read‑only), `model_id` in `JobCreateRequest`; CLI `model list|get|download|verify`
+- M4: `count` in `JobCreateRequest`; add `item_index` to artifacts/progress/logs (batch)
+- M5: GPU hygiene and resilience (OR‑001), retries/idempotency taxonomy
 
 ---
 
 ## 7) Next Steps
 
 - Finalize YAML and generate `docs/openapi/openapi.v1.json` from the API app; CI adds spec diff.
-- Scaffold `scripts/export_openapi.py` and Makefile targets.
-- Initialize Typer-based `dreamforge` CLI with downloader commands first.
+- Scaffold `scripts/export_openapi.py` and Makefile targets. (Done.)
+- Initialize CLI with models commands: list, get, download (hf:/civitai:), verify. (Done.)
 
+Notes for M3 implementation specifics:
+- Models list returns installed+enabled entries only; additional filters are deferred to keep surface lean.
+- `civitai:` refs use numeric version IDs in M3 for reliable downloads; slug lookup is a future improvement.
