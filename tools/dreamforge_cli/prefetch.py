@@ -85,6 +85,7 @@ def prefetch_from_manifest(path: str, *, models_root: str) -> list[dict[str, Any
                         "kind": asset["kind"],
                         "version": asset.get("version"),
                         "source_uri": src.get("url"),
+                        "capabilities": asset.get("capabilities", ["upscale"]),
                         "direct": {"url": src.get("url"), "sha256": src.get("sha256")},
                     }
                 )
@@ -172,4 +173,3 @@ def cmd_assets_verify(args: argparse.Namespace) -> int:
     all_ok = all(oks) if oks else True
     print(json.dumps({"ok": all_ok, "checks": oks}))
     return 0 if all_ok else 3
-
