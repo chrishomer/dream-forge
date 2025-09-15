@@ -46,6 +46,62 @@ def create_job_with_step(
     return job
 
 
+def create_job_with_chain(
+    session: Session,
+    *,
+    job_type: str,
+    params: dict[str, Any],
+    idempotency_key: str | None,
+    upscale_scale: int = 2,
+) -> Job:
+    """Create a job with two ordered steps: generate -> upscale.
+
+    Stores minimal per-step metadata in Step.metadata_json for traceability.
+    """
+    job = Job(
+        id=_uuid.uuid4(),
+        type=job_type,
+        status="queued",
+        params_json=params,
+        idempotency_key_hash=_hash_idempotency(idempotency_key) if idempotency_key else None,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session.add(job)
+
+    step_gen = Step(
+        id=_uuid.uuid4(),
+        job_id=job.id,
+        name="generate",
+        status="queued",
+        metadata_json={},
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session.add(step_gen)
+
+    step_up = Step(
+        id=_uuid.uuid4(),
+        job_id=job.id,
+        name="upscale",
+        status="queued",
+        metadata_json={"scale": int(upscale_scale)},
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session.add(step_up)
+
+    session.flush()
+    return job
+
+
+def get_step_by_name(session: Session, *, job_id: str | _uuid.UUID, name: str) -> Step | None:
+    jid = str(job_id)
+    return session.scalars(
+        select(Step).where(cast(Step.job_id, String) == jid, Step.name == name).order_by(Step.created_at.asc())
+    ).first()
+
+
 def get_job(session: Session, job_id: str | _uuid.UUID) -> Job | None:
     # Avoid dialect-dependent UUID casting by comparing as text
     jid = str(job_id)

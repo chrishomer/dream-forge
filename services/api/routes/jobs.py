@@ -72,9 +72,22 @@ def create_job(
     if req.type != "generate":
         raise HTTPException(status_code=422, detail={"code": "invalid_input", "message": "Unsupported type", "details": {"type": req.type}})
 
-    # Persist Job + Step
+    # Persist Job (+ chain if requested)
+    has_chain = bool(getattr(req, "chain", None) and getattr(req.chain, "upscale", None))
     with get_session() as session:
-        job = repos.create_job_with_step(session, job_type=req.type, params=req.model_dump(), idempotency_key=idempotency_key)
+        if has_chain:
+            scale = int(getattr(req.chain.upscale, "scale", 2))  # type: ignore[union-attr]
+            if scale not in (2, 4):
+                raise HTTPException(status_code=422, detail={"code": "invalid_input", "message": "scale must be 2 or 4"})
+            job = repos.create_job_with_chain(
+                session,
+                job_type=req.type,
+                params=req.model_dump(),
+                idempotency_key=idempotency_key,
+                upscale_scale=scale,
+            )
+        else:
+            job = repos.create_job_with_step(session, job_type=req.type, params=req.model_dump(), idempotency_key=idempotency_key)
 
     # Enqueue task (or inline if DF_CELERY_EAGER)
     if os.getenv("DF_CELERY_EAGER", "false").lower() in {"1", "true", "yes"}:

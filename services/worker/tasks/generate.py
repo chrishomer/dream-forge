@@ -351,6 +351,26 @@ def generate(*, job_id: str) -> dict[str, Any]:
             repos.mark_job_status(session, job_uuid, "succeeded")
             repos.append_event(session, job_id=job_uuid, step_id=step.id, code="step.finish")
             repos.append_event(session, job_id=job_uuid, step_id=None, code="job.finish")
+        # If an upscale step exists (chain), enqueue it now
+        try:
+            with get_session() as session:
+                next_step = repos.get_step_by_name(session, job_id=job_uuid, name="upscale")
+            if next_step is not None:
+                eager = os.getenv("DF_CELERY_EAGER", "false").lower() in {"1", "true", "yes"}
+                if eager:
+                    # Run inline to keep tests/dev simple
+                    from services.worker.tasks.upscale import upscale as task_upscale  # type: ignore
+
+                    task_upscale(job_id=str(job_uuid))
+                else:
+                    from celery import Celery  # import here to avoid worker import cycles
+
+                    broker = os.getenv("DF_REDIS_URL", "redis://127.0.0.1:6379/0")
+                    app = Celery("df_worker_chain", broker=broker)
+                    app.conf.update(broker_connection_retry_on_startup=True)
+                    app.send_task("jobs.upscale", kwargs={"job_id": str(job_uuid)}, queue="gpu.default")
+        except Exception:
+            pass
         return {"status": "ok", "artifact_keys": count}
     except Exception as exc:  # noqa: BLE001
         with get_session() as session:

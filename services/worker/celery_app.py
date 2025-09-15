@@ -20,7 +20,7 @@ def _new_app() -> Celery:
         task_always_eager=os.getenv("DF_CELERY_EAGER", "false").lower() in {"1", "true", "yes"},
         worker_concurrency=int(os.getenv("DF_WORKER_CONCURRENCY", "2")),
         broker_connection_retry_on_startup=True,
-        imports=("services.worker.tasks.generate",),
+        imports=("services.worker.tasks.generate", "services.worker.tasks.upscale"),
     )
 
     # Declare GPU queue with direct exchange and matching routing key
@@ -68,5 +68,6 @@ _start_metrics_server()
 # Ensure task modules are imported so Celery registers them
 try:  # pragma: no cover
     import services.worker.tasks.generate  # noqa: F401
+    import services.worker.tasks.upscale  # noqa: F401
 except Exception:
     pass

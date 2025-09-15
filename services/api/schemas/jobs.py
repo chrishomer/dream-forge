@@ -3,6 +3,15 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class ChainUpscale(BaseModel):
+    # Minimal M5 parameters
+    scale: int = Field(default=2, ge=2, le=4, description="Upscale factor (2 or 4)")
+
+
+class Chain(BaseModel):
+    upscale: ChainUpscale | None = None
+
+
 class JobCreateRequest(BaseModel):
     type: str = Field(pattern=r"^generate$")
     prompt: str
@@ -18,6 +27,8 @@ class JobCreateRequest(BaseModel):
     # M4: batch count (1..100); default 1
     count: int = Field(default=1, ge=1, le=100)
     model_id: str | None = None
+    # M5: optional fixed chain (generate -> upscale)
+    chain: Chain | None = None
 
 
 class JobCreated(BaseModel):
