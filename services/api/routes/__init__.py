@@ -3,6 +3,7 @@ from .jobs import router as jobs_router
 from .artifacts import router as artifacts_router
 from .logs import router as logs_router
 from .progress import router as progress_router
+from .models import router as models_router
 
 router = APIRouter(prefix="/v1")
 
@@ -14,3 +15,4 @@ router.include_router(jobs_router)
 router.include_router(artifacts_router)
 router.include_router(logs_router)
 router.include_router(progress_router)
+router.include_router(models_router)
