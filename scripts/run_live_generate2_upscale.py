@@ -12,10 +12,25 @@ from typing import Any, Dict, List, Tuple
 
 
 API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8001/v1")
-PROMPT = (
-    "A morning mountain scene, with mist hanging in the air and the beautiful "
-    "sunrise peeking through."
+# Allow overriding the prompt via environment variable LIVE_PROMPT.
+# Falls back to the original default text if not set.
+PROMPT = os.getenv(
+    "LIVE_PROMPT",
+    (
+        "A morning mountain scene, with mist hanging in the air and the beautiful "
+        "sunrise peeking through."
+    ),
 )
+
+# Allow overriding batch count via environment variable LIVE_COUNT.
+# Falls back to 2 (two generations) if not set or invalid.
+def _get_live_count() -> int:
+    raw = os.getenv("LIVE_COUNT", "2")
+    try:
+        n = int(raw)
+    except Exception:
+        n = 2
+    return max(1, min(n, 20))  # keep sane bounds for a live run
 
 
 def _join(*parts: str) -> str:
@@ -75,7 +90,7 @@ def create_job() -> str:
         "width": 1024,
         "height": 1024,
         "steps": 30,
-        "count": 2,
+        "count": _get_live_count(),
         "chain": {"upscale": {"scale": 2}},
     }
     models = list_models()
@@ -131,7 +146,8 @@ def main() -> int:
     print(f"API_BASE={API_BASE}")
     wait_ready()
 
-    print("\nCreate job: 2× generate @1024 then upscale×2")
+    cnt = _get_live_count()
+    print(f"\nCreate job: {cnt}× generate @1024 then upscale×2")
     print(f"Prompt: {PROMPT}")
     job_id = create_job()
     print(f"job_id={job_id}")
@@ -202,4 +218,3 @@ if __name__ == "__main__":
     except Exception as e:  # noqa: BLE001
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
-

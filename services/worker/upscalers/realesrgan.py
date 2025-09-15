@@ -17,11 +17,17 @@ class RealESRGANUpscaler(Upscaler):  # pragma: no cover
 
     def _ensure_weights(self) -> str:
         filename = "RealESRGAN_x4plus.pth" if self.scale == 4 else "RealESRGAN_x2plus.pth"
-        path = os.path.join(self.weights_dir, filename)
-        if not os.path.exists(path):
-            # Best-effort: leave helpful error; separate downloader can prefetch
-            raise UpscaleError(f"Real-ESRGAN weights not found: {path}")
-        return path
+        # Primary location
+        cand = [os.path.join(self.weights_dir, filename)]
+        # Fallback to registry-managed default layout if user prefetched via manifest
+        models_root = os.getenv("DF_MODELS_ROOT", "/models")
+        suffix = "x4plus" if self.scale == 4 else "x2plus"
+        cand.append(os.path.join(models_root, "upscaler-gan", f"realesrgan@{suffix}", filename))
+        for p in cand:
+            if os.path.exists(p):
+                return p
+        # Best-effort: leave helpful error; separate downloader can prefetch
+        raise UpscaleError(f"Real-ESRGAN weights not found in: {cand}")
 
     def _load_engine(self):
         from basicsr.archs.rrdbnet_arch import RRDBNet  # type: ignore
@@ -61,4 +67,3 @@ class RealESRGANUpscaler(Upscaler):  # pragma: no cover
 
 # Local import to avoid optional global dep at import time
 import numpy as np  # type: ignore  # noqa: E402
-

@@ -99,7 +99,7 @@ services:
       timeout: 3s
       retries: 10
     volumes:
-      - ${HOME}/.cache/dream-forge:/models:ro
+      - ${DF_HOST_CACHE:-${HOME}/.cache/dream-forge}:/models:ro
     
 
   worker:
@@ -118,6 +118,8 @@ services:
       DF_WORKER_METRICS_PORT: 9009
       DF_WORKER_CONCURRENCY: 1
       DF_MODELS_ROOT: /models
+      HF_HOME: /models/hf-cache
+      DF_UPSCALE_RE_WEIGHTS_DIR: /models/realesrgan-weights
       # Generation tuning defaults (safe for 1024x1024 on 12GB GPUs)
       DF_ENABLE_XFORMERS: "0"
       DF_ATTENTION_SLICING: "0"
@@ -156,7 +158,7 @@ services:
     ports:
       - "9010:9009"
     volumes:
-      - ${HOME}/.cache/dream-forge:/models:ro
+      - ${DF_HOST_CACHE:-${HOME}/.cache/dream-forge}:/models:rw
 
 volumes:
   pgdata:
