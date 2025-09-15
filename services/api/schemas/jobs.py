@@ -16,6 +16,7 @@ class JobCreateRequest(BaseModel):
     embed_metadata: bool = True
     seed: int | None = None
     # batch 'count' arrives in M4; here we hardcode 1
+    model_id: str | None = None
 
 
 class JobCreated(BaseModel):

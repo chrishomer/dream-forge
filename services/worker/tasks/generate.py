@@ -250,15 +250,49 @@ def generate(*, job_id: str) -> dict[str, Any]:
         height = 256
         steps = 10
 
+    # Resolve model path: prefer registry by model_id, else default registry model, else env fallback
+    selected_model_path = None
+    model_source = "env_fallback"
+    model_id_param = params.get("model_id")
+    with get_session() as session:
+        if model_id_param:
+            m = repos.get_model(session, model_id_param)
+            if m and m.installed and m.enabled and m.local_path:
+                selected_model_path = m.local_path
+                model_source = "registry"
+            else:
+                # explicit selection but unavailable
+                selected_model_path = None
+        if not selected_model_path:
+            mdef = repos.get_default_model(session, kind="sdxl-checkpoint")
+            if mdef and mdef.installed and mdef.enabled and mdef.local_path:
+                selected_model_path = mdef.local_path
+                model_source = "registry"
+
+    env_model_path = os.getenv(
+        "DF_GENERATE_MODEL_PATH",
+        "/models/civitai/epicrealismXL_working.safetensors",
+    )
+    model_path = selected_model_path or env_model_path
+
+    # Log selected model
+    try:
+        with get_session() as session:
+            repos.append_event(
+                session,
+                job_id=job_uuid,
+                step_id=step.id,
+                code="model.selected",
+                payload={"model_id": model_id_param, "local_path": model_path, "source": model_source},
+            )
+    except Exception:
+        pass
+
     fake = os.getenv("DF_FAKE_RUNNER", "0").lower() in {"1", "true"}
     try:
         if fake:
             data = _run_fake(prompt, width, height, seed)
         else:
-            model_path = os.getenv(
-                "DF_GENERATE_MODEL_PATH",
-                "/models/civitai/epicrealismXL_working.safetensors",
-            )
             data = _run_real(model_path, prompt, negative, width, height, steps, guidance, seed)
         # Optional black-frame sanity check (pixel variance). If image appears blank, raise to surface error in logs.
         try:
