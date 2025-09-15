@@ -454,6 +454,7 @@ Exit codes:
 - M3: `/models`, `/models/{id}` (read‑only), `model_id` in `JobCreateRequest`; CLI `model list|get|download|verify`
   - M4: `count` in `JobCreateRequest`; add `item_index` to artifacts/progress/logs (batch)
   - M5: Optional `chain.upscale.scale` (2 or 4); combined progress remains aggregate only; SSE event types unchanged
+  - M5.B: Optional `chain.upscale.impl` (`auto|diffusion|gan`, default `auto`) and `chain.upscale.strict_scale` (default `false`).
 - M7: GPU hygiene and resilience (OR‑001), retries/idempotency taxonomy
 
 ---

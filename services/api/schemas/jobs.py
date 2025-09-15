@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
+from typing import Literal
 
 
 class ChainUpscale(BaseModel):
-    # Minimal M5 parameters
+    # M5.B parameters
     scale: int = Field(default=2, ge=2, le=4, description="Upscale factor (2 or 4)")
+    impl: Literal["auto", "diffusion", "gan"] = Field(
+        default="auto",
+        description="Implementation selector: auto|diffusion|gan",
+    )
+    strict_scale: bool = Field(
+        default=False,
+        description="If true, reject when impl cannot natively realize scale (e.g., diffusion with scale=2).",
+    )
 
 
 class Chain(BaseModel):

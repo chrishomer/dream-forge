@@ -11,3 +11,15 @@ Status: Backlog candidates (defer until after M5 unless required)
 - Background chaining or cross‑job chaining. Out of scope for M5.
 - Rich model capabilities taxonomy (e.g., models advertising `upscale`). For now, upscale operates generically on artifacts.
 
+---
+
+M5.B specific deferrals (post‑M5.B unless required)
+
+- End‑to‑end GPU hygiene metrics for upscalers (emit `gpu_mem_used_before/after`, `peak_gpu_mem_used`) and VRAM headroom preflight — planned but not required to ship M5.B.
+- Models registry entries for upscalers (diffusion/GAN) with checksum provenance and `capabilities: ['upscale']` — optional in M5.B.
+- NCNN/Vulkan or TensorRT backends for Real‑ESRGAN to improve portability/perf.
+- Additional upscalers: SwinIR, BSRGAN variants, 4x‑UltraSharp ESRGAN — add via adapter pattern after M5.B stabilizes.
+- Determinism controls for diffusion upscaler (seeded guidance, low‑noise policies) and quality presets.
+- Operator policy defaults: `DF_UPSCALE_STRICT_SCALE` fleet‑wide default and per‑request override reconciliation.
+- CLI `dreamforge upscaler` helpers to prefetch weights/snapshots and run quick local validations.
+- Enhanced seam tests: automated image‑space assertions for tiled mode across diverse content (beyond basic MAD epsilon).

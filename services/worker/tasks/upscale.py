@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import os
 import uuid as _uuid
-from typing import Any
+from typing import Any, Callable
 
 from celery import shared_task
 from PIL import Image
@@ -11,6 +11,9 @@ from PIL import Image
 from modules.persistence.db import get_session
 from modules.persistence import repos
 from modules.storage import s3 as s3mod
+from multiprocessing import get_context
+from services.worker.upscalers.registry import get_upscaler
+from services.worker.upscalers.base import UpscaleError
 
 
 def _scale_factor(job_id: _uuid.UUID) -> int:
@@ -41,6 +44,13 @@ def upscale(*, job_id: str) -> dict[str, Any]:
 
     scale = _scale_factor(job_uuid)
     cfg = s3mod.from_env()
+    impl = None
+    strict_scale = False
+    with get_session() as session:
+        step_meta = repos.get_step_by_name(session, job_id=job_uuid, name="upscale")
+        if step_meta and isinstance(step_meta.metadata_json, dict):
+            impl = step_meta.metadata_json.get("impl")
+            strict_scale = bool(step_meta.metadata_json.get("strict_scale", False))
 
     try:
         with get_session() as session:
@@ -48,6 +58,11 @@ def upscale(*, job_id: str) -> dict[str, Any]:
         # Filter only generate step artifacts
         if gen_step is not None:
             artifacts = [a for a in artifacts if str(a.step_id) == str(gen_step.id)]
+
+        # Read job params for diffusion guidance (optional)
+        with get_session() as session:
+            job, _ = repos.get_job_with_steps(session, job_uuid)
+            job_params = job.params_json if job else {}
 
         # Process each artifact in order
         for a in artifacts:
@@ -61,16 +76,19 @@ def upscale(*, job_id: str) -> dict[str, Any]:
                 img2.save(out, format="PNG")
                 out_bytes = out.getvalue()
             else:
-                # Real/minimal path: fetch source image and resize
+                # Real path: fetch source image and invoke selected upscaler (subprocess by default)
                 s3 = s3mod.client(cfg)
                 obj = s3.get_object(Bucket=cfg.bucket, Key=a.s3_key)
                 data = obj["Body"].read()
-                img = Image.open(io.BytesIO(data)).convert("RGB")
-                w2, h2 = img.size[0] * scale, img.size[1] * scale
-                img2 = img.resize((w2, h2), resample=Image.LANCZOS)
-                out = io.BytesIO()
-                img2.save(out, format="PNG")
-                out_bytes = out.getvalue()
+                out_bytes = _run_upscale_bytes(
+                    source_png=data,
+                    scale=scale,
+                    impl=impl,
+                    strict_scale=strict_scale,
+                    job_params=job_params,
+                )
+                img2 = Image.open(io.BytesIO(out_bytes))
+                w2, h2 = img2.size
 
             # Write upscale artifact
             fmt = "png"
@@ -92,7 +110,7 @@ def upscale(*, job_id: str) -> dict[str, Any]:
                     item_index=a.item_index,
                     s3_key=key,
                     checksum=None,
-                    metadata_json={"scale": scale},
+                    metadata_json={"scale": scale, "impl": impl or "auto", "strict_scale": strict_scale},
                 )
                 repos.append_event(
                     session,
@@ -116,3 +134,82 @@ def upscale(*, job_id: str) -> dict[str, Any]:
             if up_step is not None:
                 repos.append_event(session, job_id=job_uuid, step_id=up_step.id, code="error", level="error", payload={"message": str(exc)})
         raise
+
+
+def _child_upscale_bytes(source_png: bytes, *, scale: int, impl: str | None, strict_scale: bool, job_params: dict) -> bytes:
+    from io import BytesIO
+    from PIL import Image
+    from services.worker.upscalers.registry import get_upscaler
+
+    img = Image.open(BytesIO(source_png)).convert("RGB")
+
+    params = {
+        "prompt": job_params.get("prompt", ""),
+        "negative_prompt": job_params.get("negative_prompt"),
+        "steps": int(job_params.get("steps", 30)),
+        "guidance_scale": float(job_params.get("guidance", 0.0)),
+        "noise_level": int(os.getenv("DF_UPSCALE_SDX4_NOISE_LEVEL", 20)),
+        "auto_tile": os.getenv("DF_UPSCALE_AUTO_TILE", "1"),
+        "tile_in": os.getenv("DF_UPSCALE_TILE_IN", 256),
+        "overlap_in": os.getenv("DF_UPSCALE_OVERLAP_IN", 32),
+    }
+
+    def try_impl(which: str | None) -> Image.Image:
+        upscaler = get_upscaler(which, scale=scale)
+        return upscaler.run(img, scale=scale, params=params)
+
+    if strict_scale and (impl or "auto") == "diffusion" and int(scale) == 2:
+        raise UpscaleError("strict_scale=true and impl=diffusion cannot realize 2x")
+
+    try:
+        result = try_impl(impl)
+    except Exception as e:
+        if strict_scale:
+            raise
+        try:
+            fallback_impl = "gan" if (impl or "auto") == "diffusion" else None
+            result = try_impl(fallback_impl)
+        except Exception:
+            raise e
+
+    out = io.BytesIO()
+    result.save(out, format="PNG")
+    return out.getvalue()
+
+
+def _run_upscale_bytes(*, source_png: bytes, scale: int, impl: str | None, strict_scale: bool, job_params: dict) -> bytes:
+    use_subproc = os.getenv("DF_UPSCALE_SUBPROCESS", "1").lower() in {"1", "true", "yes"}
+    if not use_subproc:
+        return _child_upscale_bytes(source_png, scale=scale, impl=impl, strict_scale=strict_scale, job_params=job_params)
+
+    mp = get_context("spawn")
+    parent_conn, child_conn = mp.Pipe(False)
+    p = mp.Process(target=_child_upscale_entry, args=(child_conn, source_png, scale, impl, strict_scale, job_params), daemon=True)
+    p.start()
+    child_conn.close()
+    data = parent_conn.recv_bytes()
+    p.join(timeout=5)
+    try:
+        parent_conn.close()
+    except Exception:
+        pass
+    return data
+
+
+def _child_upscale_entry(conn, source_png: bytes, scale: int, impl: str | None, strict_scale: bool, job_params: dict):
+    try:
+        data = _child_upscale_bytes(source_png, scale=scale, impl=impl, strict_scale=strict_scale, job_params=job_params)
+        conn.send_bytes(data)
+    finally:
+        try:
+            import torch  # type: ignore
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass

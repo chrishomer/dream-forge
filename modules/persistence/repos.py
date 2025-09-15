@@ -53,6 +53,8 @@ def create_job_with_chain(
     params: dict[str, Any],
     idempotency_key: str | None,
     upscale_scale: int = 2,
+    upscale_impl: str | None = None,
+    upscale_strict_scale: bool | None = None,
 ) -> Job:
     """Create a job with two ordered steps: generate -> upscale.
 
@@ -85,7 +87,11 @@ def create_job_with_chain(
         job_id=job.id,
         name="upscale",
         status="queued",
-        metadata_json={"scale": int(upscale_scale)},
+        metadata_json={
+            "scale": int(upscale_scale),
+            **({"impl": upscale_impl} if upscale_impl else {}),
+            **({"strict_scale": bool(upscale_strict_scale)} if upscale_strict_scale is not None else {}),
+        },
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )

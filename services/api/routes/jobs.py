@@ -79,12 +79,27 @@ def create_job(
             scale = int(getattr(req.chain.upscale, "scale", 2))  # type: ignore[union-attr]
             if scale not in (2, 4):
                 raise HTTPException(status_code=422, detail={"code": "invalid_input", "message": "scale must be 2 or 4"})
+            impl = getattr(req.chain.upscale, "impl", "auto")  # type: ignore[union-attr]
+            strict_scale = bool(getattr(req.chain.upscale, "strict_scale", False))  # type: ignore[union-attr]
+            if impl not in ("auto", "diffusion", "gan"):
+                raise HTTPException(status_code=422, detail={"code": "invalid_input", "message": "impl must be one of: auto,diffusion,gan"})
+            # Strict policy: reject impl that cannot natively match the requested scale
+            if strict_scale and impl == "diffusion" and scale == 2:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "invalid_input",
+                        "message": "diffusion upscaler natively supports 4x; set strict_scale=false to allow 4x then downsample to 2x",
+                    },
+                )
             job = repos.create_job_with_chain(
                 session,
                 job_type=req.type,
                 params=req.model_dump(),
                 idempotency_key=idempotency_key,
                 upscale_scale=scale,
+                upscale_impl=impl,
+                upscale_strict_scale=strict_scale,
             )
         else:
             job = repos.create_job_with_step(session, job_type=req.type, params=req.model_dump(), idempotency_key=idempotency_key)
