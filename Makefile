@@ -21,6 +21,19 @@ test:
 openapi:
 	PYTHONPATH=. uv run python scripts/export_openapi.py --out docs/openapi/openapi.v1.json
 
+# M3 CLI helpers
+model-download:
+	uv run python -m tools.dreamforge_cli model download $(ref) --models-root $${DF_MODELS_ROOT:-$$HOME/.cache/dream-forge}
+
+model-verify:
+	uv run python -m tools.dreamforge_cli model verify $(id)
+
+model-list:
+	uv run python -m tools.dreamforge_cli model list | jq .
+
+model-get:
+	uv run python -m tools.dreamforge_cli model get $(id) | jq .
+
 up:
 	cd compose && docker compose up -d --build
 
