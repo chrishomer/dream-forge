@@ -19,7 +19,11 @@ class SDX4Upscaler(Upscaler):
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         dtype = torch.float16 if device == "cuda" else torch.float32
-        pipe = StableDiffusionUpscalePipeline.from_pretrained(self.model_id, torch_dtype=dtype)
+        mirror_dir = os.getenv("DF_UPSCALE_SDX4_DIR")
+        if mirror_dir and os.path.isdir(mirror_dir):
+            pipe = StableDiffusionUpscalePipeline.from_pretrained(mirror_dir, torch_dtype=dtype, local_files_only=True)
+        else:
+            pipe = StableDiffusionUpscalePipeline.from_pretrained(self.model_id, torch_dtype=dtype)
 
         # SDP backend optional
         sdp = os.getenv("DF_SDP_BACKEND", "auto")
@@ -117,4 +121,3 @@ class SDX4Upscaler(Upscaler):
                 del pipe  # type: ignore
             except Exception:
                 pass
-

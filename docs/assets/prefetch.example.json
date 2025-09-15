@@ -1,0 +1,19 @@
+[
+  {
+    "type": "registry_model",
+    "kind": "upscaler-gan",
+    "name": "realesrgan",
+    "version": "x4plus",
+    "source": {
+      "adapter": "direct",
+      "url": "file:///absolute/path/to/RealESRGAN_x4plus.pth",
+      "sha256": "<sha256-of-file>"
+    }
+  },
+  {
+    "type": "diffusers_cache",
+    "repo": "stabilityai/stable-diffusion-x4-upscaler",
+    "revision": "main"
+  }
+]
+

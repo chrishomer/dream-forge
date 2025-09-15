@@ -10,6 +10,7 @@ from modules.persistence import repos
 from .downloader import download as dl_download, verify_registry_model
 from .adapters.huggingface import HFAdapter
 from .adapters.civitai import CivitAIAdapter
+from .prefetch import cmd_assets_prefetch, cmd_assets_verify
 
 
 def cmd_model_list(args: argparse.Namespace) -> int:
@@ -76,6 +77,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_verify = spm.add_parser("verify", help="Verify a registered model by id")
     p_verify.add_argument("id", help="Model UUID")
     p_verify.set_defaults(func=cmd_model_verify)
+
+    # assets prefetch/verify (ops tooling)
+    p_assets = sp.add_parser("assets", help="Assets utilities (prefetch/verify)")
+    spa = p_assets.add_subparsers(dest="subcmd")
+
+    p_pref = spa.add_parser("prefetch", help="Prefetch assets (bundle or manifest)")
+    p_pref.add_argument("--bundle", default=None, help="Convenience bundle (e.g., 'upscalers')")
+    p_pref.add_argument("--manifest", default=None, help="Path to manifest JSON for assets")
+    p_pref.add_argument("--models-root", default=os.path.expanduser("~/.cache/dream-forge"), help="Install root directory")
+    p_pref.set_defaults(func=cmd_assets_prefetch)
+
+    p_av = spa.add_parser("verify", help="Verify assets from manifest")
+    p_av.add_argument("--manifest", required=True, help="Path to manifest JSON for assets")
+    p_av.set_defaults(func=cmd_assets_verify)
 
     return p
 
