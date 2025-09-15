@@ -64,11 +64,12 @@ def stream_progress(job_id: str, since_ts: str | None = None) -> StreamingRespon
 
     def _gen() -> Iterable[bytes]:
         last_hb = time.time()
+        cursor = since_dt
         # Emit snapshot events first then optionally poll until terminal
         while True:
             with get_session() as session:
                 status_job = repos.get_job(session, job_id)
-                events = repos.iter_events(session, job_id, since_ts=since_dt, tail=None)
+                events = repos.iter_events(session, job_id, since_ts=cursor, tail=None)
                 progress = repos.progress_for_job(session, job_id)
 
             # Emit any events since cursor
@@ -84,7 +85,7 @@ def stream_progress(job_id: str, since_ts: str | None = None) -> StreamingRespon
                     "level": e.level,
                     "payload": e.payload_json,
                 })
-                since_dt = e.ts  # type: ignore[misc]
+                cursor = e.ts
 
             # Emit progress
             yield sse_event("progress", {"progress": progress})
@@ -104,4 +105,3 @@ def stream_progress(job_id: str, since_ts: str | None = None) -> StreamingRespon
     return StreamingResponse(_gen(), media_type="text/event-stream", headers={
         "Cache-Control": "no-store",
     })
-

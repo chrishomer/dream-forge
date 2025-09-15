@@ -19,7 +19,6 @@ from modules.storage import s3 as s3mod
 import gc
 from multiprocessing import get_context
 import contextlib
-from diffusers import AutoencoderKL  # type: ignore
 
 
 def _env_truthy(name: str, default: str = "0") -> bool:
@@ -53,7 +52,7 @@ def _run_fake(prompt: str, width: int, height: int, seed: int) -> bytes:
 def _child_generate(model_path: str, prompt: str, negative_prompt: str | None, width: int, height: int, steps: int, guidance: float, seed: int, conn) -> None:  # pragma: no cover
     try:
         import torch  # type: ignore
-        from diffusers import StableDiffusionXLPipeline  # type: ignore
+        from diffusers import StableDiffusionXLPipeline, AutoencoderKL  # type: ignore
 
         torch.backends.cudnn.benchmark = False
         has_cuda = torch.cuda.is_available()
