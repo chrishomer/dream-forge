@@ -210,7 +210,7 @@ components:
 
     JobCreateRequest:
       type: object
-      required: [type, prompt, width, height]
+      required: [type, prompt]
       properties:
         type:
           type: string
@@ -230,6 +230,17 @@ components:
         seed: { type: integer, minimum: 0 }
         count: { type: integer, minimum: 1, maximum: 100, default: 1 }
         model_id: { type: string, format: uuid }
+        chain:
+          type: object
+          description: Optional fixed chain enabling upscale after generate
+          properties:
+            upscale:
+              type: object
+              properties:
+                scale:
+                  type: integer
+                  enum: [2, 4]
+                  default: 2
       description: |
         If `seed` is omitted and `count>1`, a fresh random seed is generated for each item right before its generation begins.
         If `seed` is provided and `count>1`, MVP behavior randomizes per item (future seed_strategy may change this).
@@ -441,7 +452,8 @@ Exit codes:
 - M1: `POST /jobs`, `GET /jobs/{id}`
 - M2: `/artifacts`, `/logs` (NDJSON), `/progress`, `/progress/stream`
 - M3: `/models`, `/models/{id}` (read‑only), `model_id` in `JobCreateRequest`; CLI `model list|get|download|verify`
-- M4: `count` in `JobCreateRequest`; add `item_index` to artifacts/progress/logs (batch)
+  - M4: `count` in `JobCreateRequest`; add `item_index` to artifacts/progress/logs (batch)
+  - M5: Optional `chain.upscale.scale` (2 or 4); combined progress remains aggregate only; SSE event types unchanged
 - M7: GPU hygiene and resilience (OR‑001), retries/idempotency taxonomy
 
 ---
