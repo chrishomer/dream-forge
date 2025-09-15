@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select, update, String, cast
 from sqlalchemy.orm import Session
 
-from .models import Artifact, Event, Job, Step
+from .models import Artifact, Event, Job, Step, Model
 
 
 def _hash_idempotency(value: str) -> bytes:
@@ -190,3 +190,102 @@ def insert_artifact(
     session.add(art)
     session.flush()
     return art
+
+
+# --- Models (Registry) ---
+
+def list_models(session: Session, *, enabled_only: bool = True) -> list[Model]:
+    stmt = select(Model)
+    if enabled_only:
+        stmt = stmt.where(Model.enabled == True).where(Model.installed == True)  # noqa: E712
+    rows = session.scalars(stmt.order_by(Model.created_at.asc())).all()
+    return list(rows)
+
+
+def get_model(session: Session, model_id: str | _uuid.UUID) -> Model | None:
+    mid = str(model_id)
+    return session.scalars(select(Model).where(cast(Model.id, String) == mid)).first()
+
+
+def get_model_by_key(session: Session, *, name: str, version: str | None, kind: str) -> Model | None:
+    stmt = select(Model).where(Model.name == name, Model.kind == kind)
+    if version is None:
+        stmt = stmt.where(Model.version.is_(None))
+    else:
+        stmt = stmt.where(Model.version == version)
+    return session.scalars(stmt).first()
+
+
+def upsert_model(
+    session: Session,
+    *,
+    name: str,
+    kind: str,
+    version: str | None,
+    source_uri: str | None,
+    checkpoint_hash: str | None = None,
+    parameters_schema: dict | None = None,
+    capabilities: list[str] | None = None,
+) -> Model:
+    existing = get_model_by_key(session, name=name, version=version, kind=kind)
+    now = datetime.utcnow()
+    if existing:
+        existing.source_uri = source_uri
+        existing.checkpoint_hash = checkpoint_hash
+        if parameters_schema is not None:
+            existing.parameters_schema = parameters_schema
+        if capabilities is not None:
+            existing.capabilities = capabilities
+        existing.updated_at = now
+        session.flush()
+        return existing
+
+    m = Model(
+        id=_uuid.uuid4(),
+        name=name,
+        kind=kind,
+        version=version,
+        source_uri=source_uri,
+        checkpoint_hash=checkpoint_hash,
+        parameters_schema=parameters_schema or {},
+        capabilities=capabilities or ["generate"],
+        installed=False,
+        enabled=True,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(m)
+    session.flush()
+    return m
+
+
+def mark_model_installed(
+    session: Session,
+    *,
+    model_id: _uuid.UUID,
+    local_path: str,
+    files_json: list[dict],
+    installed: bool = True,
+) -> None:
+    session.execute(
+        update(Model)
+        .where(cast(Model.id, String) == str(model_id))
+        .values(local_path=local_path, files_json=files_json, installed=1 if installed else 0, updated_at=datetime.utcnow())
+    )
+
+
+def set_model_enabled(session: Session, *, model_id: _uuid.UUID, enabled: bool) -> None:
+    session.execute(
+        update(Model)
+        .where(cast(Model.id, String) == str(model_id))
+        .values(enabled=1 if enabled else 0, updated_at=datetime.utcnow())
+    )
+
+
+def get_default_model(session: Session, *, kind: str = "sdxl-checkpoint") -> Model | None:
+    stmt = (
+        select(Model)
+        .where(Model.kind == kind, Model.enabled == True, Model.installed == True)  # noqa: E712
+        .order_by(Model.created_at.asc())
+    )
+    return session.scalars(stmt).first()
