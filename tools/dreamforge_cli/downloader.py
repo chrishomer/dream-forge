@@ -149,3 +149,28 @@ def download(ref: str, *, adapter: Adapter, models_root: str) -> DownloadResult:
         except Exception:
             pass
 
+
+def verify_registry_model(model_id: str) -> tuple[bool, list[FileEntry]]:
+    """Recompute checksums for files in the registry entry; return (ok, files).
+
+    If verification succeeds, also ensure `installed=true` remains and update files_json.
+    If it fails, do not change installed flag; caller can decide to disable.
+    """
+    with get_session() as session:
+        m = repos.get_model(session, model_id)
+        if not m or not m.local_path:
+            return False, []
+        root = Path(m.local_path)
+        files = []
+        for entry in m.files_json or []:
+            p = root / entry.get("path", "")
+            if not p.exists():
+                return False, []
+            files.append({"path": entry["path"], "sha256": _sha256_file(p), "size": p.stat().st_size})
+        ok = all(
+            any(f["path"] == e.get("path") and f["sha256"] == e.get("sha256") for e in (m.files_json or []))
+            for f in files
+        )
+        if ok:
+            repos.mark_model_installed(session, model_id=m.id, local_path=str(root), files_json=files, installed=True)
+        return ok, files
