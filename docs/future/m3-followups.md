@@ -19,8 +19,8 @@ Status: Candidate backlog (prioritize by impact and complexity)
 ## API & Worker
 
 - Filters: add `enabled` query param to `/v1/models` and optional pagination.
-- Background download job (M9): admin‑triggered `model_download` queue for server‑side downloads that upsert the registry.
-- VRAM preflight (M5): add headroom checks and early error when the selected model cannot fit.
+- Background download job (M10): admin‑triggered `model_download` queue for server‑side downloads that upsert the registry.
+- VRAM preflight (M7): add headroom checks and early error when the selected model cannot fit.
 - Error taxonomy: explicit `invalid_model` error code across API when a specified `model_id` is missing/disabled/not installed.
 
 ## DevEx & Ops
@@ -28,4 +28,3 @@ Status: Candidate backlog (prioritize by impact and complexity)
 - Cache: shared local cache for downloaded files across different refs; hardlink into normalized installs.
 - Checksums store: optional central file of sha256 → paths to speed up verify.
 - Spec diffs: CI step to diff OpenAPI for `/models*` and `model_id` changes.
-

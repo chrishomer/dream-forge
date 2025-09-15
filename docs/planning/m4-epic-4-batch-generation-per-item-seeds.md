@@ -43,7 +43,7 @@ Definition of Done (DoD)
 Out of Scope (explicit, to remain lean per Masters 02)
 - Seed derivation strategies beyond “random per item” (e.g., fixed or deterministic sequences). A future `seed_strategy` could introduce this.
 - Parallel item rendering within a single job. Items run sequentially in MVP to minimize GPU contention and complexity.
-- Multi‑step pipelines or cross‑item deduplication. Chaining remains M7.
+- Multi‑step pipelines or cross‑item deduplication. Chaining remains M5.
 
 ---
 
@@ -60,7 +60,7 @@ Out of Scope (explicit, to remain lean per Masters 02)
 
 ## 3) Design Notes & Lean Choices
 
-- Sequential execution: One job → one step (`generate`) that loops items 0..count‑1. Keeps VRAM steady and simplifies progress semantics. A future optimization may load the pipeline once per job; MVP may reload per item to minimize code churn (acceptable for dev/staging; performance tuning is M5/M11).
+- Sequential execution: One job → one step (`generate`) that loops items 0..count‑1. Keeps VRAM steady and simplifies progress semantics. A future optimization may load the pipeline once per job; MVP may reload per item to minimize code churn (acceptable for dev/staging; performance tuning is M7/M12).
 - Seed policy (MVP): `seed_per_item = user_seed_ignored_if_count>1 or fresh_random_if_seed_missing`. Explicit `seed_strategy` is deferred.
 - Progress computation (MVP): Aggregate `progress = completed_items / count`. Per‑item progress is 1.0 when its artifact is written; no “ticks” are emitted during sampling in MVP (optional lightweight `sampling.tick` can be added without affecting ACs).
 - Error semantics (NFR‑013): If any item fails, the step and job fail; partial artifacts for prior items remain retrievable.
@@ -201,19 +201,19 @@ Scope
 Tasks
 - Sequential loop with explicit VRAM cleanup already happens at the end of the step; acceptable for MVP.
 - Optional micro‑optimization (deferred unless trivial): in real runner path, load pipeline once per job and reuse per item (requires refactor of `_run_real`/`_child_generate` to accept a list of seeds and to stream back multiple images).
-- Timeouts per item are not introduced in M4; step‑level timeout is a later milestone (M5/M11). Document current behavior.
+- Timeouts per item are not introduced in M4; step‑level timeout is a later milestone (M7/M12). Document current behavior.
 
 Acceptance
-- No GPU OOM regressions observed in dev with modest counts; failures do not leak GPU memory (validated informally for now; formal OR‑001 in M5).
+- No GPU OOM regressions observed in dev with modest counts; failures do not leak GPU memory (validated informally for now; formal OR‑001 in M7).
 
 ---
 
 ## 5) Risks & Mitigations
 
-- Pipeline reload cost (real runner): Rendering N>1 items may reload the model N times. Mitigation: accept temporarily for MVP; document; plan refactor under M5/M11.
-- Long‑running jobs with large `count`: Without per‑item timeouts, a hang stalls the step. Mitigation: keep `count<=100`; surface SSE heartbeats; add timeouts in M5.
+- Pipeline reload cost (real runner): Rendering N>1 items may reload the model N times. Mitigation: accept temporarily for MVP; document; plan refactor under M7/M12.
+- Long‑running jobs with large `count`: Without per‑item timeouts, a hang stalls the step. Mitigation: keep `count<=100`; surface SSE heartbeats; add timeouts in M7.
 - Progress granularity: Only jumps on artifact completion in MVP. Mitigation: optional lightweight `sampling.tick` logs; UIs can still show aggregate progress.
-- Error taxonomy: All failures currently `internal`. Mitigation: tighten in M5.
+- Error taxonomy: All failures currently `internal`. Mitigation: tighten in M7.
 
 ---
 

@@ -442,7 +442,7 @@ Exit codes:
 - M2: `/artifacts`, `/logs` (NDJSON), `/progress`, `/progress/stream`
 - M3: `/models`, `/models/{id}` (read‑only), `model_id` in `JobCreateRequest`; CLI `model list|get|download|verify`
 - M4: `count` in `JobCreateRequest`; add `item_index` to artifacts/progress/logs (batch)
-- M5: GPU hygiene and resilience (OR‑001), retries/idempotency taxonomy
+- M7: GPU hygiene and resilience (OR‑001), retries/idempotency taxonomy
 
 ---
 

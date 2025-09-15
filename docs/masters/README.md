@@ -122,7 +122,7 @@ Related materials:
 ### 08 — Roadmap (Milestones & Epics)
 
 - Delivery strategy: Thin, end‑to‑end functional slices tied to the App Creator persona.
-- Milestones: M0 (Bootstrap) → M5 (GPU hygiene & resilience) → M6+ (staging/K3S, chaining, adapters, admin downloads, V1 hardening & DX).
+- Milestones: M0 (Bootstrap) → M5 (Minimal chaining) → M6 (API client usability) → M7+ (GPU hygiene & resilience, staging/K3S, adapters, admin downloads, V1 hardening & DX).
 - Quality gates: OpenAPI examples, SSE samples, simplicity guardrails, GPU hygiene checks.
 - Use when: Planning scope/time, staging features behind flags, or negotiating trade‑offs.
 
@@ -147,7 +147,7 @@ Related materials:
 ## Cross‑Document Threads to Keep in Mind
 
 - Reproducible‑enough outputs: Documented in Principles (02), required in Requirements (03), implemented across Runner/Artifacts (05), and reflected in metadata contracts (06, 07).
-- GPU hygiene (OR‑001): Defined in Principles (02) with acceptance criteria, enforced in Requirements (03 NFR‑070), implemented in Systems (05) and validated in Roadmap milestones (08 M5).
+- GPU hygiene (OR‑001): Defined in Principles (02) with acceptance criteria, enforced in Requirements (03 NFR‑070), implemented in Systems (05) and validated in Roadmap milestones (08 M7).
 - Batch semantics: API contracts (07), data model (`item_index` and keys in 06), and worker execution (05) must align.
 - Versioning: Path‑based API versioning in Communication (07); `schema_version` fields in Data Model (06); tracked in OpenAPI (10).
 
@@ -173,4 +173,3 @@ Related materials:
 ## Changelog (for this Index)
 
 - 2025-09-13 — Initial comprehensive index created; reading order aligned with design phases; includes cross‑document threads and contribution guidance.
-

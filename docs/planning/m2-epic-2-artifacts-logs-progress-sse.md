@@ -35,7 +35,7 @@ Goals (this milestone):
 Non‑Goals (defer to later milestones):
 - Batch artifacts (`count>1`) and per-item progress (M4).
 - Background downloader and model registry endpoints (M3/M4 per Roadmap numbering).
-- GPU hygiene hardening, retries/DLQ, full error taxonomy enforcement (M5).
+- GPU hygiene hardening, retries/DLQ, full error taxonomy enforcement (M7).
 - Authentication/authorization (Beta).
 
 ---
@@ -320,8 +320,8 @@ data: {"progress":1.0}
 ## 13) Out‑of‑Scope & Future Hooks
 
 - Batch (`count>1`) and per‑item events (M4) — plan now for `item_index` to appear but keep items array empty.
-- Admin background downloader (M9 optional) — no API exposure in M2.
-- Stronger receipts and metadata (M10+) — keep `metadata_json` fields populated for forward compatibility.
+- Admin background downloader (M10 optional) — no API exposure in M2.
+- Stronger receipts and metadata (M11+) — keep `metadata_json` fields populated for forward compatibility.
 
 ---
 

@@ -25,7 +25,7 @@ Outcome (DoD):
 - OpenAPI v1 updated; tests cover Models API, CLI flows (mocked network), and job execution using `model_id` (with fake runner).
 
 Out of scope (explicit):
-- Background downloader job via API (Roadmap M9 optional).
+- Background downloader job via API (Roadmap M10 optional).
 - Model enable/disable mutation APIs; write operations stay in CLI for MVP.
 
 ---

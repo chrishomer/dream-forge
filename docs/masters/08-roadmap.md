@@ -29,7 +29,7 @@ Recommendation: Thin functional slices anchored in the App Creator persona’s j
 
 ## 3) Milestones (Thin Functional Slices)
 
-Note: Each milestone is definition-of-done (DoD) oriented with clear acceptance criteria (AC). MVP spans M0–M5; Beta spans M6–M9 (optional flags); V1 spans M10–M12.
+Note: Each milestone is definition-of-done (DoD) oriented with clear acceptance criteria (AC). MVP spans M0–M5; Beta spans M6–M10 (optional flags); V1 spans M11–M13.
 
 M0 — Epic 0 Bootstrap (Foundation)
 
@@ -56,42 +56,47 @@ M4 — Batch Generation (1–100) + Per-Item Seeds
 - Outcome: `count` param (default 1, max 100); per-item runtime seed; per-item events (`item_index`), aggregated progress; artifact keying includes index.
 - AC: `count=5` yields 5 artifacts with distinct seeds (when seed omitted); SSE shows per-item and aggregate progress.
 
-M5 — GPU Hygiene & Resilience
-
-- Outcome: OR‑001 enforced; VRAM headroom checks; OOM classification; standardized error envelope; idempotency keys; retries/backoff + DLQ.
-- AC: Forced failure/timeout leaves GPU clean; OOM surfaces with diagnostics; duplicate create is idempotent.
-
-M6 — Staging Deploy (K3S Single-Node + CDI)
-
-- Outcome: K3S manifests for `api` and `worker`; NVIDIA device plugin + CDI; pinned CUDA/PyTorch images; staging environment.
-- AC: End-to-end run on K3S; GPU access via CDI; secrets via K8s; basic runbooks.
-
-M7 — Minimal Chaining (V2: generate → upscale)
+M5 — Minimal Chaining (V2: generate → upscale)
 
 - Outcome: Multi-step job with `generate` then `upscale`; steps/events persisted; aggregated progress across steps; artifacts per step.
 - AC: API accepts a simple sequence; SSE shows step transitions and combined progress; outputs include both generate and upscale artifacts.
 
-M8 — Provider Adapter (Optional)
+M6 — API Client Usability Iterations
+
+- Outcome: Stabilize the API surface for a thin client: add basic filters/pagination to the Models API; tighten error taxonomy and envelopes across endpoints; ensure `/v1/jobs/{id}` summaries are consistent; improve SSE/logs examples and docs; polish OpenAPI with realistic examples. No auth yet; no new services.
+- AC: `GET /v1/models?enabled=true&page=1&limit=50` returns paginated results; error responses use consistent codes/envelopes; `GET /v1/jobs/{id}` includes stable `{ count, completed }` summary fields; SSE/logs examples validated against Compose; updated OpenAPI committed.
+
+M7 — GPU Hygiene & Resilience
+
+- Outcome: OR‑001 enforced; VRAM headroom checks; OOM classification; standardized error envelope; idempotency keys; retries/backoff + DLQ.
+- AC: Forced failure/timeout leaves GPU clean; OOM surfaces with diagnostics; duplicate create is idempotent.
+
+M8 — Staging Deploy (K3S Single-Node + CDI)
+
+- Outcome: K3S manifests for `api` and `worker`; NVIDIA device plugin + CDI; pinned CUDA/PyTorch images; staging environment.
+- AC: End-to-end run on K3S; GPU access via CDI; secrets via K8s; basic runbooks.
+
+M9 — Provider Adapter (Optional)
 
 - Outcome: Provider adapter interface and one remote adapter behind a feature flag; parity with local job semantics; artifacts/metadata consistent.
 - AC: A small job runs via remote provider; API responses unchanged; presets clearly documented.
 
-M9 — Background Downloader (Optional, Admin)
+M10 — Background Downloader (Optional, Admin)
 
 - Outcome: Admin-triggered `model_download` job on IO queue; uses unified downloader; upserts registry.
 - AC: Admin endpoint enqueues download; task runs without affecting GPU queue; registry updated with checksums/provenance.
 
-M10 — V1 Packaging & Access
+M11 — V1 Packaging & Access
 
 - Outcome: API keys; improved reproducibility receipts (checkpoint hashes in artifacts); optional CLI conveniences; retention configuration.
 - AC: API-key auth toggled on; receipts verified; docs updated for production posture.
 
-M11 — Hardening & DX (Stabilization Pass)
+M12 — Hardening & DX (Stabilization Pass)
 
 - Outcome: Prometheus metrics, golden-seed tests, improved docs/examples; error taxonomy tightened; API and worker stability; image sizes tracked; lean guardrails enforced.
 - AC: Time-to-first-render p50 documented; >95% success on default preset in dev; docs enable an external adopter to integrate.
 
-M12 — Toward Full Vision
+M13 — Toward Full Vision
 
 - Outcome: Additional job types (enhance), preset/version governance light, optional second remote provider, stronger receipts; evaluate quotas.
 - AC: Demonstrate thin chained flows and extensibility without expanding the service count; maintain lean posture.
@@ -109,7 +114,7 @@ M12 — Toward Full Vision
 ## 5) Risks & Pivots
 
 - SSE scaling stress → pivot to pub/sub cache; keep API surface stable.
-- Model size/throughput pain → prioritize background downloader (M10) earlier.
+- Model size/throughput pain → prioritize background downloader (M11) earlier.
 - GPU OOM rates high → optimize presets and progress expectations; document supported GPU classes.
 
 ---

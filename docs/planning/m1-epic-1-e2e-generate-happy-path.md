@@ -18,7 +18,7 @@ Key emphasis per feedback:
 - Prefer container GPU using CDI (not host execution), with helper scripts to generate CDI spec and to inspect environment.
 - Borrow patterns from the local working example at `/home/chrishomer/projects/personal/example` (for CDI generation and env inspection) and integrate equivalent helpers (`make inspect-env`, `make gpu-cdi-generate`).
 
-Out of scope for M1: artifacts listing, logs endpoint, progress polling/SSE, batch (`count > 1`), downloader and model registry APIs, retries/DLQ, and full GPU hygiene enforcement (all planned for M2–M5 per roadmap 08).
+Out of scope for M1: artifacts listing, logs endpoint, progress polling/SSE, batch (`count > 1`), downloader and model registry APIs, retries/DLQ, and full GPU hygiene enforcement (all planned for M2–M7 per roadmap 08).
 
 ---
 
@@ -66,8 +66,8 @@ Non‑Goals (explicit deferrals)
 - No `/artifacts`, `/logs`, `/progress` or `/progress/stream` in M1 (M2).
 - No batch (`count > 1`) (M4).
 - No downloader/registry APIs (M3–M4). Default model is a local path.
-- No idempotency enforcement or retries/DLQ (M5). We only accept and store `Idempotency-Key`.
-- No GPU hygiene enforcement/metrics beyond best‑effort cleanup (M5).
+- No idempotency enforcement or retries/DLQ (M7). We only accept and store `Idempotency-Key`.
+- No GPU hygiene enforcement/metrics beyond best‑effort cleanup (M7).
 
 ---
 
@@ -136,7 +136,7 @@ Container GPU via CDI
 DevEx & Docs
 - E1‑13 DEV.md: “Container GPU via CDI” instructions + smoke test steps.
 - E1‑14 Mini integration guide: curl examples for M1, artifact verification, troubleshooting.
-- E1‑15 Masters sync: minor note in 10‑openapi milestone coverage to match 08‑roadmap (GPU hygiene/idempotency in M5).
+- E1‑15 Masters sync: minor note in 10‑openapi milestone coverage to match 08‑roadmap (GPU hygiene/idempotency in M7).
 
 Testing
 - E1‑16 Unit: API validation, error envelope shape, enqueue calls.
@@ -191,7 +191,7 @@ Testing
 - Default model path: `${HOME}/.cache/dream-forge/civitai/epicrealismXL_working.safetensors`. We will load SDXL via Diffusers `StableDiffusionXLPipeline.from_single_file()` using this checkpoint.
 - Smoke defaults: 256x256, 10 steps, FP16. Runtime defaults remain 1024x1024, 30 steps.
 - Runner base image: Use best judgement; we’ll use `pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` for broad compatibility and smaller size, then install Diffusers stack.
-- Idempotency: Keep simple in M1 — accept/store header only; full behavior deferred to M5.
+- Idempotency: Keep simple in M1 — accept/store header only; full behavior deferred to M7.
 - Metrics: Minimal (job counts/status) in M1; richer metrics/logs/SSE deferred to M2+.
 
 ---
