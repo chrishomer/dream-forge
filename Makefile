@@ -1,7 +1,11 @@
 .PHONY: uv-sync lint fmt type test openapi up up-fake down logs migrate-head migrate-rev run-api run-worker status inspect-env gpu-cdi-generate gpu-cdi-list e2e-m1 e2e-m4 bucket bucket-ls
 
 assets-prefetch:
-	uv run python -m tools.dreamforge_cli assets prefetch --bundle upscalers --models-root $${DF_MODELS_ROOT:-$$HOME/.cache/dream-forge}
+	@if [ -n "$${MANIFEST}" ]; then \
+		uv run python -m tools.dreamforge_cli assets prefetch --manifest $${MANIFEST} --models-root $${DF_MODELS_ROOT:-$$HOME/.cache/dream-forge}; \
+	else \
+		uv run python -m tools.dreamforge_cli assets prefetch --bundle upscalers --models-root $${DF_MODELS_ROOT:-$$HOME/.cache/dream-forge}; \
+	fi
 
 assets-verify:
 	uv run python -m tools.dreamforge_cli assets verify --manifest $${MANIFEST:-docs/assets/prefetch.json}
