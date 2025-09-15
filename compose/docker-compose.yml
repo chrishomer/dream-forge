@@ -74,6 +74,7 @@ services:
       DF_DB_URL: postgresql+psycopg://dfs:dfs@postgres:5432/dreamforge
       DF_REDIS_URL: redis://redis:6379/0
       DF_MINIO_ENDPOINT: http://minio:9000
+      DF_S3_PUBLIC_ENDPOINT: http://127.0.0.1:9000
       DF_MINIO_ACCESS_KEY: minioadmin
       DF_MINIO_SECRET_KEY: minioadmin
       DF_MINIO_BUCKET: dreamforge

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import urlparse
 from datetime import timedelta
 
 import boto3
@@ -44,10 +45,27 @@ def upload_bytes(cfg: S3Config, key: str, data: bytes, content_type: str = "appl
 
 
 def presign_get(cfg: S3Config, key: str, expires: timedelta = timedelta(hours=1)) -> str:
-    s3 = client(cfg)
+    """Generate a presigned URL for GET with optional public endpoint override.
+
+    If DF_S3_PUBLIC_ENDPOINT or DF_MINIO_PUBLIC_ENDPOINT is set, we sign the URL
+    against that endpoint so the returned URL is directly reachable by external clients.
+    Internal SDK operations should continue to use the internal endpoint.
+    """
+    public_endpoint = os.getenv("DF_S3_PUBLIC_ENDPOINT") or os.getenv("DF_MINIO_PUBLIC_ENDPOINT")
+    if public_endpoint:
+        # Build a client targeting the public endpoint for signing only
+        sess = boto3.session.Session()
+        s3 = sess.client(
+            "s3",
+            endpoint_url=public_endpoint,
+            aws_access_key_id=cfg.access_key,
+            aws_secret_access_key=cfg.secret_key,
+            region_name=cfg.region,
+        )
+    else:
+        s3 = client(cfg)
     return s3.generate_presigned_url(
         ClientMethod="get_object",
         Params={"Bucket": cfg.bucket, "Key": key},
         ExpiresIn=int(expires.total_seconds()),
     )
-

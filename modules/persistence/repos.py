@@ -253,7 +253,8 @@ def insert_artifact(
 def list_models(session: Session, *, enabled_only: bool = True) -> list[Model]:
     stmt = select(Model)
     if enabled_only:
-        stmt = stmt.where(Model.enabled == True).where(Model.installed == True)  # noqa: E712
+        # Use integer semantics (0/1) for cross-dialect compatibility
+        stmt = stmt.where(Model.enabled == 1).where(Model.installed == 1)
     rows = session.scalars(stmt.order_by(Model.created_at.asc())).all()
     return list(rows)
 
@@ -341,7 +342,7 @@ def set_model_enabled(session: Session, *, model_id: _uuid.UUID, enabled: bool) 
 def get_default_model(session: Session, *, kind: str = "sdxl-checkpoint") -> Model | None:
     stmt = (
         select(Model)
-        .where(Model.kind == kind, Model.enabled == True, Model.installed == True)  # noqa: E712
+        .where(Model.kind == kind, Model.enabled == 1, Model.installed == 1)
         .order_by(Model.created_at.asc())
     )
     return session.scalars(stmt).first()
