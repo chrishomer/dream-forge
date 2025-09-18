@@ -3,13 +3,18 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid as _uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select, update, String, cast
 from sqlalchemy.orm import Session
 
 from .models import Artifact, Event, Job, Step, Model
+UTC = timezone.utc
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 def _hash_idempotency(value: str) -> bytes:
@@ -29,8 +34,8 @@ def create_job_with_step(
         status="queued",
         params_json=params,
         idempotency_key_hash=_hash_idempotency(idempotency_key) if idempotency_key else None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=_utcnow(),
+        updated_at=_utcnow(),
     )
     session.add(job)
     step = Step(
@@ -38,8 +43,8 @@ def create_job_with_step(
         job_id=job.id,
         name="generate",
         status="queued",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=_utcnow(),
+        updated_at=_utcnow(),
     )
     session.add(step)
     session.flush()
@@ -66,8 +71,8 @@ def create_job_with_chain(
         status="queued",
         params_json=params,
         idempotency_key_hash=_hash_idempotency(idempotency_key) if idempotency_key else None,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=_utcnow(),
+        updated_at=_utcnow(),
     )
     session.add(job)
 
@@ -77,8 +82,8 @@ def create_job_with_chain(
         name="generate",
         status="queued",
         metadata_json={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=_utcnow(),
+        updated_at=_utcnow(),
     )
     session.add(step_gen)
 
@@ -92,8 +97,8 @@ def create_job_with_chain(
             **({"impl": upscale_impl} if upscale_impl else {}),
             **({"strict_scale": bool(upscale_strict_scale)} if upscale_strict_scale is not None else {}),
         },
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=_utcnow(),
+        updated_at=_utcnow(),
     )
     session.add(step_up)
 
@@ -120,6 +125,18 @@ def get_job_with_steps(session: Session, job_id: str | _uuid.UUID) -> tuple[Job 
         return None, []
     steps = session.scalars(select(Step).where(cast(Step.job_id, String) == str(job.id)).order_by(Step.created_at.asc())).all()
     return job, list(steps)
+
+def list_jobs(session: Session, *, status: str | None = None, limit: int = 20) -> list[Job]:
+    """List recent jobs ordered by updated_at desc with optional status filter.
+
+    Caps limit to 200 to avoid accidental large scans.
+    """
+    lmt = max(1, min(int(limit), 200))
+    stmt = select(Job)
+    if status:
+        stmt = stmt.where(Job.status == status)
+    stmt = stmt.order_by(Job.updated_at.desc()).limit(lmt)
+    return list(session.scalars(stmt).all())
 
 
 def list_artifacts_by_job(session: Session, job_id: str | _uuid.UUID) -> list[Artifact]:
@@ -178,7 +195,7 @@ def mark_step_running(session: Session, step_id: _uuid.UUID) -> None:
     session.execute(
         update(Step)
         .where(cast(Step.id, String) == str(step_id))
-        .values(status="running", started_at=datetime.utcnow(), updated_at=datetime.utcnow())
+        .values(status="running", started_at=_utcnow(), updated_at=_utcnow())
     )
 
 
@@ -186,12 +203,12 @@ def mark_step_finished(session: Session, step_id: _uuid.UUID, status: str) -> No
     session.execute(
         update(Step)
         .where(cast(Step.id, String) == str(step_id))
-        .values(status=status, finished_at=datetime.utcnow(), updated_at=datetime.utcnow())
+        .values(status=status, finished_at=_utcnow(), updated_at=_utcnow())
     )
 
 
 def mark_job_status(session: Session, job_id: _uuid.UUID, status: str, error: dict[str, Any] | None = None) -> None:
-    values: dict[str, Any] = {"status": status, "updated_at": datetime.utcnow()}
+    values: dict[str, Any] = {"status": status, "updated_at": _utcnow()}
     if error:
         values["error_code"] = error.get("code")
         values["error_message"] = json.dumps(error)
@@ -211,7 +228,7 @@ def append_event(
         id=_uuid.uuid4(),
         job_id=job_id,
         step_id=step_id,
-        ts=datetime.utcnow(),
+        ts=_utcnow(),
         code=code,
         level=level,
         payload_json=payload or {},
@@ -239,7 +256,7 @@ def insert_artifact(
         id=_uuid.uuid4(),
         job_id=job_id,
         step_id=step_id,
-        created_at=datetime.utcnow(),
+        created_at=_utcnow(),
         format=format,
         width=width,
         height=height,
@@ -291,7 +308,7 @@ def upsert_model(
     capabilities: list[str] | None = None,
 ) -> Model:
     existing = get_model_by_key(session, name=name, version=version, kind=kind)
-    now = datetime.utcnow()
+    now = _utcnow()
     if existing:
         existing.source_uri = source_uri
         existing.checkpoint_hash = checkpoint_hash
@@ -333,7 +350,7 @@ def mark_model_installed(
     session.execute(
         update(Model)
         .where(cast(Model.id, String) == str(model_id))
-        .values(local_path=local_path, files_json=files_json, installed=1 if installed else 0, updated_at=datetime.utcnow())
+        .values(local_path=local_path, files_json=files_json, installed=1 if installed else 0, updated_at=_utcnow())
     )
 
 
@@ -341,7 +358,7 @@ def set_model_enabled(session: Session, *, model_id: _uuid.UUID, enabled: bool) 
     session.execute(
         update(Model)
         .where(cast(Model.id, String) == str(model_id))
-        .values(enabled=1 if enabled else 0, updated_at=datetime.utcnow())
+        .values(enabled=1 if enabled else 0, updated_at=_utcnow())
     )
 
 

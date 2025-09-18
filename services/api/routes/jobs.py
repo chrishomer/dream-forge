@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from celery import Celery
@@ -127,7 +127,7 @@ def create_job(
                 repos.mark_job_status(session, job.id, "failed", error={"code": "infra_unavailable", "message": str(exc)})
             raise HTTPException(status_code=503, detail={"code": "infra_unavailable", "message": "Failed to enqueue job"})
 
-    created = JobCreated(id=str(job.id), status="queued", type=req.type, created_at=datetime.utcnow().isoformat())
+    created = JobCreated(id=str(job.id), status="queued", type=req.type, created_at=datetime.now(timezone.utc).isoformat())
     return JobCreatedResponse(job=created)
 
 

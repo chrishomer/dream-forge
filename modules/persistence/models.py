@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import uuid as _uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 
 from sqlalchemy import (
     JSON,
@@ -18,6 +20,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.types import CHAR, TypeDecorator
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
@@ -66,8 +72,8 @@ class Job(Base):
     idempotency_key_hash: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
 
     __table_args__ = (
         CheckConstraint("status in ('queued','running','succeeded','failed')", name="jobs_status_check"),
@@ -90,8 +96,8 @@ class Step(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
 
     job: Mapped[Job] = relationship("Job", backref="steps")
 
@@ -107,7 +113,7 @@ class Event(Base):
     id: Mapped[_uuid.UUID] = mapped_column(GUID(), primary_key=True, default=_uuid_pk)
     job_id: Mapped[_uuid.UUID] = mapped_column(GUID(), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
     step_id: Mapped[_uuid.UUID | None] = mapped_column(GUID(), ForeignKey("steps.id", ondelete="CASCADE"))
-    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     code: Mapped[str] = mapped_column(String, nullable=False)
     level: Mapped[str] = mapped_column(String, nullable=False, default="info")
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
@@ -124,7 +130,7 @@ class Artifact(Base):
     id: Mapped[_uuid.UUID] = mapped_column(GUID(), primary_key=True, default=_uuid_pk)
     job_id: Mapped[_uuid.UUID] = mapped_column(GUID(), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
     step_id: Mapped[_uuid.UUID] = mapped_column(GUID(), ForeignKey("steps.id", ondelete="CASCADE"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     format: Mapped[str] = mapped_column(String, nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -158,8 +164,8 @@ class Model(Base):
     parameters_schema: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     capabilities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     files_json: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
 
     __table_args__ = (
         Index("models_name_ver_kind_uniq", "name", "version", "kind", unique=True),

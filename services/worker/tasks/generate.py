@@ -5,7 +5,7 @@ import os
 import random
 import time
 import uuid as _uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from celery import shared_task
@@ -36,7 +36,7 @@ def _find_generate_step(session, job_id: _uuid.UUID) -> Step:
 
 
 def _now_ts() -> str:
-    return datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
 
 def _run_fake(prompt: str, width: int, height: int, seed: int) -> bytes:
