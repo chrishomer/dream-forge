@@ -78,10 +78,10 @@ Notes:
   - `curl -sS http://127.0.0.1:8001/v1/jobs -H 'Content-Type: application/json' -d '{"type":"generate","prompt":"m4 demo","width":64,"height":64,"steps":2,"count":5}' | jq .`
 
 - Check status summary (shows `{ count, completed }`):
-  - `curl -sS http://127.0.0.1:8001/v1/jobs/<job_id> | jq .summary`
+  - `curl -sS http://127.0.0.1:8001/v1/jobs/$JOB | jq .summary`
 
 - List artifacts (note `item_index` and `seed`):
-  - `curl -sS http://127.0.0.1:8001/v1/jobs/<job_id>/artifacts | jq .`
+  - `curl -sS http://127.0.0.1:8001/v1/jobs/$JOB/artifacts | jq .`
 
 - Progress (aggregate and per‑item):
   - `curl -sS http://127.0.0.1:8001/v1/jobs/<job_id>/progress | jq .`
@@ -94,3 +94,20 @@ Notes:
 - Seeds: When `count>1`, the worker randomizes per item even if a `seed` is provided. This keeps batches diverse; a future `seed_strategy` may make this configurable.
 - Execution model: Items run sequentially in one step to keep VRAM steady and semantics simple. Real runner may reload the pipeline per item in MVP; further optimization is planned in M5/M11.
 - Bounds: Server rejects `count<1` or `count>100` with `422 invalid_input`.
+
+## FLUX.1-dev + SRPO (Opt-in Engine)
+
+- Prefetch assets (no auto-download in worker):
+  - Edit `docs/assets/flux_prefetch.json` and set the SRPO transformer `sha256`.
+  - Run `make assets-prefetch MANIFEST=docs/assets/flux_prefetch.json` with `HF_TOKEN` set (gated FLUX base).
+  - This registers `flux-transformer` (SRPO) and a `flux-pipeline` marker for the FLUX base in the registry.
+- Compose env (worker): ensure `HUGGINGFACE_HUB_TOKEN` or `HF_TOKEN` is provided; keep `HF_HOME=/models/hf-cache`.
+- Submit a job with the engine flag (default remains SDXL):
+  - `ENGINE=flux-srpo python scripts/run_live_generate2_upscale.py`
+  - Or via API JSON: `{ "type": "generate", ..., "engine": "flux-srpo" }`.
+- Memory: the engine enables model CPU offload by default and falls back to sequential CPU offload + fewer steps on OOM.
+- CLI helpers (`uv run dreamforge-cli ...`) now surface job/asset introspection:
+  - `dreamforge-cli jobs list --limit 5` → recent jobs (optionally `--status running`).
+  - `dreamforge-cli jobs get <job_id>` → status + summary bundle.
+  - `dreamforge-cli artifacts list <job_id> [--presign --expires 900]` → per-item metadata + optional signed URLs when S3 env is configured.
+  - `dreamforge-cli logs tail <job_id> [--since-ts 2025-09-18T00:00:00Z --tail 50]` → NDJSON stream of recent events.

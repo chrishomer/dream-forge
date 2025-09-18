@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import urllib.request
 from pathlib import Path
+import sys
 
 
 def _parse_ref(ref: str) -> tuple[str, str, str]:
@@ -37,11 +38,28 @@ class HFAdapter:
         filename = hf.get("filename")
         url = f"https://huggingface.co/{repo}/resolve/{rev}/{filename}"
         req = urllib.request.Request(url)
-        token = os.getenv("HF_TOKEN")
+        token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN")
         if token:
             req.add_header("Authorization", f"Bearer {token}")
         out = tmpdir / Path(filename).name
+        print(f"[hf] download {repo}@{rev}#{filename}", file=sys.stderr)
         with urllib.request.urlopen(req) as resp, open(out, "wb") as f:
-            f.write(resp.read())
+            total = int(resp.headers.get("Content-Length") or 0)
+            got = 0
+            last_pct = -1
+            while True:
+                buf = resp.read(8 * 1024 * 1024)
+                if not buf:
+                    break
+                f.write(buf)
+                got += len(buf)
+                if total > 0:
+                    pct = int(got * 100 / total)
+                    if pct != last_pct:
+                        print(f"[hf] progress {pct}% ({got/1e6:.1f}/{total/1e6:.1f} MB)", file=sys.stderr)
+                        last_pct = pct
+                else:
+                    if got % (512 * 1024 * 1024) < len(buf):
+                        print(f"[hf] downloaded {got/1e6:.1f} MB", file=sys.stderr)
+        print(f"[hf] done -> {out}", file=sys.stderr)
         return [out]
-

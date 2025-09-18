@@ -7,6 +7,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Protocol, TypedDict
 
 from modules.persistence.db import get_session
@@ -29,9 +30,21 @@ class Adapter(Protocol):
 
 def _sha256_file(p: Path) -> str:
     h = hashlib.sha256()
+    total = p.stat().st_size
+    done = 0
+    last_pct = -1
     with p.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+        while True:
+            chunk = f.read(8 * 1024 * 1024)
+            if not chunk:
+                break
             h.update(chunk)
+            done += len(chunk)
+            if total > 0:
+                pct = int(done * 100 / total)
+                if pct != last_pct and (pct % 5 == 0 or pct >= 99):
+                    print(f"[sha256] {p.name} {pct}% ({done/1e6:.1f}/{total/1e6:.1f} MB)", file=sys.stderr)
+                    last_pct = pct
     return h.hexdigest()
 
 
