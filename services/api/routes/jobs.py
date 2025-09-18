@@ -15,6 +15,8 @@ from services.api.schemas.jobs import (
     JobCreatedResponse,
     JobCreateRequest,
     JobStatusResponse,
+    JobListItem,
+    JobListResponse,
     StepSummary,
 )
 
@@ -158,3 +160,29 @@ def get_job(job_id: str) -> JobStatusResponse:
             error_code=job.error_code,
             error_message=job.error_message,
         )
+
+
+@router.get("/jobs", response_model=JobListResponse)
+def list_jobs(status: str | None = None, limit: int = 20) -> JobListResponse:
+    allowed = {"queued", "running", "succeeded", "failed"}
+    if status is not None and status not in allowed:
+        raise HTTPException(status_code=422, detail={"code": "invalid_input", "message": "invalid status"})
+    try:
+        limit_i = int(limit)
+    except Exception:
+        raise HTTPException(status_code=422, detail={"code": "invalid_input", "message": "invalid limit"})
+    limit_i = max(1, min(limit_i, 200))
+
+    with get_session() as session:
+        rows = repos.list_jobs(session, status=status, limit=limit_i)
+    out = [
+        JobListItem(
+            id=str(j.id),
+            type=j.type,
+            status=j.status,
+            created_at=j.created_at.isoformat(),
+            updated_at=j.updated_at.isoformat(),
+        )
+        for j in rows
+    ]
+    return JobListResponse(jobs=out)

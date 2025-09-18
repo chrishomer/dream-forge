@@ -56,6 +56,9 @@ down:
 logs:
 	cd compose && docker compose logs -f --tail=200 api worker
 
+logs-worker:
+	cd compose && docker compose logs -f --tail=200 worker
+
 migrate-head:
 	uv run alembic upgrade head
 
@@ -94,3 +97,6 @@ bucket:
 
 bucket-ls:
 	cd compose && docker compose run --rm minio-create-bucket sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc ls -r local/dreamforge || true'
+
+build-worker-live:
+	cd compose &&  docker compose up --build -d worker

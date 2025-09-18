@@ -1,0 +1,11 @@
+{
+  "type": "generate",
+  "prompt": "A 23 year old beautiful woman, golden hour, long shot, full body view, 135mm lens with buttery soft focus background",
+  "engine": "flux-srpo",
+  "width": 1024,
+  "height": 1024,
+  "steps": 28,
+  "guidance": 6.5,
+  "format": "png"
+}
+

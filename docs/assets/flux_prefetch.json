@@ -1,0 +1,20 @@
+[
+  {
+    "type": "registry_model",
+    "kind": "flux-transformer",
+    "name": "flux.1-dev-SRPO",
+    "version": "bf16",
+    "capabilities": ["generate"],
+    "source": {
+      "adapter": "direct",
+      "url": "https://huggingface.co/rockerBOO/flux.1-dev-SRPO/resolve/main/flux.1-dev-SRPO-bf16.safetensors",
+      "sha256": "f9e739615a81e4a470e6865f137124fb771ddb1cf1cd85cacb09cab37fbf6b64"
+    }
+  },
+  {
+    "type": "diffusers_cache",
+    "repo": "black-forest-labs/FLUX.1-dev",
+    "revision": "main",
+    "pipeline": "flux"
+  }
+]

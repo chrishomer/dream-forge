@@ -21,7 +21,8 @@ RUN uv sync --frozen --no-dev
 # Also install runtime deps into system site-packages for non-uv execution
 RUN pip install --no-cache-dir \
     celery==5.5.3 redis==5.0.8 psycopg[binary]==3.2.10 boto3==1.40.30 SQLAlchemy==2.0.43 alembic==1.16.5 prometheus-client==0.22.1 pydantic==2.11.9 \
-    diffusers==0.29.2 accelerate==0.31.0 transformers==4.41.2 safetensors==0.4.5 pillow==10.4.0
+    diffusers==0.31.0 accelerate==0.31.0 transformers==4.41.2 safetensors==0.4.5 pillow==10.4.0 huggingface-hub==0.24.7 \
+    sentencepiece==0.2.0 protobuf==4.25.3
 
 COPY services ./services
 COPY modules ./modules

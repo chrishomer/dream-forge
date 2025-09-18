@@ -238,10 +238,25 @@ def generate(*, job_id: str) -> dict[str, Any]:
 
     prompt: str = params.get("prompt", "")
     negative: str | None = params.get("negative_prompt")
+    engine_param = params.get("engine")
+    default_engine = os.getenv("DF_DEFAULT_ENGINE", "sdxl")
+    if isinstance(default_engine, str):
+        default_engine = default_engine.strip().lower() or "sdxl"
+    else:
+        default_engine = "sdxl"
+
+    if isinstance(engine_param, str) and engine_param.strip():
+        engine = engine_param.strip().lower()
+    else:
+        engine = default_engine
+
+    allowed_engines = {"sdxl", "flux-srpo"}
+    if engine not in allowed_engines:
+        engine = default_engine
     width: int = int(params.get("width", 1024))
     height: int = int(params.get("height", 1024))
     steps: int = int(params.get("steps", 30))
-    guidance: float = float(params.get("guidance", 7.0))
+    guidance: float = float(params.get("guidance", 8.0))
     # M4: batch count and per-item seeds
     try:
         count: int = int(params.get("count", 1))
@@ -286,6 +301,45 @@ def generate(*, job_id: str) -> dict[str, Any]:
     )
     model_path = selected_model_path or env_model_path
 
+    # If using FLUX engine, best-effort resolve SRPO transformer from registry to a concrete file path
+    if engine == "flux-srpo":
+        srpo_path = None
+        with get_session() as session:
+            # If an explicit model_id is provided and is a flux-transformer, use it
+            if model_id_param:
+                m = repos.get_model(session, model_id_param)
+                if m and m.installed and m.enabled and m.local_path and m.kind == "flux-transformer":
+                    # Pick the first safetensors file from files_json
+                    files = m.files_json or []
+                    for f in files:
+                        p = f.get("path")
+                        if isinstance(p, str) and p.endswith(".safetensors"):
+                            srpo_path = os.path.join(m.local_path, p)
+                            break
+            # Else use default flux-transformer
+            if not srpo_path:
+                mdef = repos.get_default_model(session, kind="flux-transformer")
+                if mdef and mdef.installed and mdef.enabled and mdef.local_path:
+                    files = mdef.files_json or []
+                    for f in files:
+                        p = f.get("path")
+                        if isinstance(p, str) and p.endswith(".safetensors"):
+                            srpo_path = os.path.join(mdef.local_path, p)
+                            break
+        if srpo_path and os.path.exists(srpo_path):
+            os.environ["DF_FLUX_SRPO_TRANSFORMER_PATH"] = srpo_path
+            try:
+                with get_session() as session:
+                    repos.append_event(
+                        session,
+                        job_id=job_uuid,
+                        step_id=step.id,
+                        code="engine.flux_srpo.transformer_selected",
+                        payload={"path": srpo_path},
+                    )
+            except Exception:
+                pass
+
     # Log selected model
     try:
         with get_session() as session:
@@ -295,6 +349,13 @@ def generate(*, job_id: str) -> dict[str, Any]:
                 step_id=step.id,
                 code="model.selected",
                 payload={"model_id": model_id_param, "local_path": model_path, "source": model_source},
+            )
+            repos.append_event(
+                session,
+                job_id=job_uuid,
+                step_id=step.id,
+                code="engine.selected",
+                payload={"engine": engine},
             )
     except Exception:
         pass
@@ -309,7 +370,30 @@ def generate(*, job_id: str) -> dict[str, Any]:
             if fake:
                 data = _run_fake(prompt, width, height, seed_i)
             else:
-                data = _run_real(model_path, prompt, negative, width, height, steps, guidance, seed_i)
+                if engine == "flux-srpo":
+                    # Lazy import engine only when needed to avoid test-time import of diffusers
+                    from services.worker.engines.engine_registry import get_engine  # type: ignore
+
+                    eng = get_engine("flux-srpo")
+                    # FLUX defaults if caller kept SDXL defaults
+                    try:
+                        if int(params.get("steps", 30)) == 30:
+                            steps = 50
+                        if float(params.get("guidance", 8.0)) >= 7.0:
+                            guidance = 3.5
+                    except Exception:
+                        pass
+                    data = eng.generate_one(
+                        prompt=prompt,
+                        negative_prompt=negative,
+                        width=width,
+                        height=height,
+                        steps=steps,
+                        guidance=guidance,
+                        seed=seed_i,
+                    )
+                else:
+                    data = _run_real(model_path, prompt, negative, width, height, steps, guidance, seed_i)
 
             # Optional black-frame sanity check per item
             try:
@@ -335,7 +419,12 @@ def generate(*, job_id: str) -> dict[str, Any]:
                     item_index=idx,
                     s3_key=key,
                     checksum=None,
-                    metadata_json={"prompt": prompt, "negative_prompt": negative, "seed": seed_i},
+                    metadata_json={
+                        "prompt": prompt,
+                        "negative_prompt": negative,
+                        "seed": seed_i,
+                        "engine": engine,
+                    },
                 )
                 repos.append_event(
                     session,

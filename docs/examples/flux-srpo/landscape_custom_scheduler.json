@@ -1,0 +1,13 @@
+{
+  "type": "generate",
+  "engine": "flux-srpo",
+  "prompt": "Golden-hour alpine lake, crisp reflections, high detail, natural color grading",
+  "width": 1344,
+  "height": 768,
+  "steps": 36,
+  "guidance": 5.5,
+  "scheduler": "euler",
+  "seed": 123456789,
+  "format": "jpg"
+}
+

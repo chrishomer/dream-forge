@@ -36,6 +36,8 @@ class JobCreateRequest(BaseModel):
     # M4: batch count (1..100); default 1
     count: int = Field(default=1, ge=1, le=100)
     model_id: str | None = None
+    # Engine selection (opt-in). Defaults to SDXL for backward compatibility.
+    engine: Literal["sdxl", "flux-srpo"] | None = Field(default=None, description="Generation engine selector")
     # M5: optional fixed chain (generate -> upscale)
     chain: Chain | None = None
 
@@ -73,3 +75,15 @@ class ErrorResponse(BaseModel):
     message: str
     details: dict | None = None
     correlation_id: str | None = None
+
+
+class JobListItem(BaseModel):
+    id: str
+    type: str
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class JobListResponse(BaseModel):
+    jobs: list[JobListItem]

@@ -126,6 +126,19 @@ def get_job_with_steps(session: Session, job_id: str | _uuid.UUID) -> tuple[Job 
     steps = session.scalars(select(Step).where(cast(Step.job_id, String) == str(job.id)).order_by(Step.created_at.asc())).all()
     return job, list(steps)
 
+
+def list_jobs(session: Session, *, status: str | None = None, limit: int = 20) -> list[Job]:
+    """List recent jobs ordered by updated_at desc with optional status filter.
+
+    Caps limit to 200 to avoid accidental large scans.
+    """
+    lmt = max(1, min(int(limit), 200))
+    stmt = select(Job)
+    if status:
+        stmt = stmt.where(Job.status == status)
+    stmt = stmt.order_by(Job.updated_at.desc()).limit(lmt)
+    return list(session.scalars(stmt).all())
+
 def list_jobs(session: Session, *, status: str | None = None, limit: int = 20) -> list[Job]:
     """List recent jobs ordered by updated_at desc with optional status filter.
 

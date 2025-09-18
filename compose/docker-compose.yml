@@ -119,6 +119,15 @@ services:
       DF_WORKER_CONCURRENCY: 1
       DF_MODELS_ROOT: /models
       HF_HOME: /models/hf-cache
+      # HF access for gated FLUX base
+      HUGGINGFACE_HUB_TOKEN: ${HF_TOKEN:-}
+      # FLUX base + SRPO config
+      DF_FLUX_BASE_REPO: black-forest-labs/FLUX.1-dev
+      DF_FLUX_BASE_REV: main
+      # Optional: default engine can be set to sdxl (default) or flux-srpo
+      # DF_DEFAULT_ENGINE: sdxl
+      # If SRPO transformer is pre-installed at a known path, set it explicitly; otherwise engine will search defaults under DF_MODELS_ROOT
+      # DF_FLUX_SRPO_TRANSFORMER_PATH: /models/flux-transformer/flux.1-dev-SRPO@bf16/flux.1-dev-SRPO-bf16.safetensors
       DF_UPSCALE_RE_WEIGHTS_DIR: /models/realesrgan-weights
       # Generation tuning defaults (safe for 1024x1024 on 12GB GPUs)
       DF_ENABLE_XFORMERS: "0"

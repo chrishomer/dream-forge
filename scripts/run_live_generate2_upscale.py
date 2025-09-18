@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Tuple
 
 
 API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8001/v1")
+ENGINE = os.getenv("LIVE_ENGINE")  # optional: sdxl | flux-srpo
 # Allow overriding the prompt via environment variable LIVE_PROMPT.
 # Falls back to the original default text if not set.
 PROMPT = os.getenv(
@@ -99,6 +100,9 @@ def create_job() -> str:
         print(f"Using model_id={payload['model_id']}")
     else:
         print("NOTE: /v1/models empty; using DF_GENERATE_MODEL_PATH fallback inside worker")
+    if ENGINE:
+        payload["engine"] = ENGINE
+        print(f"Using engine={ENGINE}")
     st, body = _http_json("POST", _join("jobs"), payload, timeout=60)
     if st not in (200, 202) or "job" not in body:
         raise RuntimeError(f"Create job failed: HTTP {st} body={body}")
@@ -174,7 +178,10 @@ def main() -> int:
                 evt = json.loads(ln)
                 code = evt.get("code")
                 if code in {"step.start", "step.finish", "artifact.written", "error"}:
-                    print(f"log: {evt['ts']} code={code} item={evt.get('item_index')} step={evt.get('step_id')}")
+                    seed_info = f" seed={evt.get('seed')}" if 'seed' in evt else ""
+                    print(
+                        f"log: {evt['ts']} code={code} item={evt.get('item_index')} step={evt.get('step_id')}{seed_info}"
+                    )
                 else:
                     # Keep output tidy for other events
                     pass
@@ -197,6 +204,11 @@ def main() -> int:
     gens = [a for a in arts if "/generate/" in a.get("s3_key", "")]
     ups = [a for a in arts if "/upscale/" in a.get("s3_key", "")]
     print(f"generate_artifacts={len(gens)} upscale_artifacts={len(ups)}")
+    # Print seeds for each generated item
+    if gens:
+        print("seeds:")
+        for a in sorted(gens, key=lambda x: x.get("item_index", 0)):
+            print(f"  item={a.get('item_index')} seed={a.get('seed')}")
     assert len(gens) >= 2 and len(ups) >= 2, "expected at least 2 generate and 2 upscale artifacts"
 
     # Verify presigned URLs (sample)
@@ -205,7 +217,7 @@ def main() -> int:
             code = http_status(sample[0]["url"], timeout=180)
             print(f"presign_{label}_status={code}")
 
-    print("\nDONE: 2×1024 generate + upscale validated.")
+    print("\nDONE: generate + upscale validated.")
     return 0
 
 

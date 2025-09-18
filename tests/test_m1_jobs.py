@@ -66,3 +66,42 @@ def test_create_and_status_happy_path():
         body = client.get(f"/v1/jobs/{job_id}").json()
     assert body["status"] == "succeeded"
 
+
+def _wait_for_succeeded(client: TestClient, job_id: str, attempts: int = 5) -> None:
+    for _ in range(attempts):
+        body = client.get(f"/v1/jobs/{job_id}").json()
+        if body["status"] == "succeeded":
+            return
+        time.sleep(0.1)
+    pytest.fail(f"job {job_id} did not succeed in time")
+
+
+def test_list_jobs_orders_by_most_recent_first():
+    client = TestClient(app)
+
+    payload = {
+        "type": "generate",
+        "prompt": "job-one",
+        "width": 64,
+        "height": 64,
+        "steps": 2,
+    }
+
+    r1 = client.post("/v1/jobs", json=payload)
+    assert r1.status_code == 200
+    job1 = r1.json()["job"]["id"]
+
+    time.sleep(0.05)
+
+    r2 = client.post("/v1/jobs", json={**payload, "prompt": "job-two"})
+    assert r2.status_code == 200
+    job2 = r2.json()["job"]["id"]
+
+    _wait_for_succeeded(client, job1)
+    _wait_for_succeeded(client, job2)
+
+    resp = client.get("/v1/jobs", params={"limit": 2})
+    assert resp.status_code == 200
+    jobs = resp.json()["jobs"]
+    assert [j["id"] for j in jobs] == [job2, job1]
+    assert jobs[0]["updated_at"] >= jobs[1]["updated_at"]

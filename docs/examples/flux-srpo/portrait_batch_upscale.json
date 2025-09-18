@@ -1,0 +1,20 @@
+{
+  "type": "generate",
+  "engine": "flux-srpo",
+  "prompt": "Portrait of an explorer wearing a vintage leather jacket, soft rim light, shallow depth of field, Kodak Portra 400 look",
+  "negative_prompt": "blurry, low quality, extra fingers, deformed, watermark",
+  "width": 832,
+  "height": 1216,
+  "steps": 30,
+  "guidance": 7.0,
+  "count": 3,
+  "format": "png",
+  "chain": {
+    "upscale": {
+      "scale": 2,
+      "impl": "auto",
+      "strict_scale": false
+    }
+  }
+}
+
